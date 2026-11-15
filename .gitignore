@@ -1,0 +1,17 @@
+*.iml
+.gradle/
+/local.properties
+/.android-sdk/
+/.gradle-dist/
+/.idea/
+.DS_Store
+/build/
+/app/build/
+/captures
+.externalNativeBuild/
+.cxx/
+*.apk
+*.ap_
+*.aab
+/server/.venv/
+/server/data/

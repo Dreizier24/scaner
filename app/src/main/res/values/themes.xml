@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.KoraScanner" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@color/kora_burgundy_dark</item>
+        <item name="android:navigationBarColor">@color/kora_burgundy_dark</item>
+        <item name="android:windowBackground">@color/kora_cream</item>
+    </style>
+</resources>

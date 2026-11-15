@@ -1,0 +1,2 @@
+-keep class ru.cora.scanner.data.remote.** { *; }
+-keepattributes *Annotation*

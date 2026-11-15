@@ -1,0 +1,30 @@
+allprojects { project ->
+    project.buildscript {
+        repositories { repos ->
+            repos.each { repo ->
+                if (repo instanceof MavenArtifactRepository) {
+                    def url = repo.url.toString()
+                    if (url.contains("repo.maven.apache.org")) {
+                        repos.remove(repo)
+                        repos.maven {
+                            url = uri("https://maven-central.storage-download.googleapis.com/maven2/")
+                        }
+                    }
+                }
+            }
+        }
+    }
+    project.repositories { repos ->
+        repos.each { repo ->
+            if (repo instanceof MavenArtifactRepository) {
+                def url = repo.url.toString()
+                if (url.contains("repo.maven.apache.org")) {
+                    repos.remove(repo)
+                    repos.maven {
+                        url = uri("https://maven-central.storage-download.googleapis.com/maven2/")
+                    }
+                }
+            }
+        }
+    }
+}
