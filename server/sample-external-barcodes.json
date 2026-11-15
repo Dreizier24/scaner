@@ -1,0 +1,11 @@
+[
+  "GUEST-2026-0001",
+  "GUEST-2026-0002",
+  {
+    "barcode": "PARTNER-TICKET-99",
+    "row": "8",
+    "seat": "14",
+    "sector": "Партер",
+    "isPushkin": false
+  }
+]

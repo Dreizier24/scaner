@@ -2,6 +2,10 @@ package ru.cora.scanner.data
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonPrimitive
 import ru.cora.scanner.data.local.dao.BarcodeIndexDao
 import ru.cora.scanner.data.local.dao.PlaceTicketDao
 import ru.cora.scanner.data.local.entity.BarcodeIndexEntity
@@ -20,8 +24,24 @@ class ExternalBarcodeImporter(
     private val json = Json { ignoreUnknownKeys = true }
 
     suspend fun importFromJson(concertId: String, jsonBody: String): Result<Int> = runCatching {
-        val rows = json.decodeFromString<List<ExternalBarcodeRow>>(jsonBody)
+        val rows = parseBarcodeFile(jsonBody)
+        if (rows.isEmpty()) error("В файле нет билетов")
         applyLocal(concertId, rows.map { it.toDto() })
+    }
+
+    private fun parseBarcodeFile(jsonBody: String): List<ExternalBarcodeRow> {
+        val trimmed = jsonBody.trim()
+        if (trimmed.isEmpty()) return emptyList()
+
+        val element = json.parseToJsonElement(trimmed)
+        val arr = element.jsonArray
+        if (arr.isNotEmpty() && runCatching { arr.first().jsonPrimitive.isString }.getOrDefault(false)) {
+            return arr.map { item ->
+                ExternalBarcodeRow(barcode = item.jsonPrimitive.content)
+            }
+        }
+
+        return json.decodeFromJsonElement<List<ExternalBarcodeRow>>(element)
     }
 
     suspend fun importViaApi(concertId: String, rows: List<ExternalBarcodeImportDto>): Result<Int> =

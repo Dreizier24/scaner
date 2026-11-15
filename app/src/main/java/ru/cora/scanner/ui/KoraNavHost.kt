@@ -30,12 +30,15 @@ fun KoraNavHost(app: KoraScannerApp) {
                 ConcertListScreen(
                     viewModel = viewModel,
                     onConcertSelected = { id ->
-                        navController.navigate("scanner/$id")
+                        navController.navigate("scanner/concert/$id")
+                    },
+                    onDigitalIdScan = {
+                        navController.navigate("scanner/digital-id")
                     },
                 )
             }
             composable(
-                route = "scanner/{concertId}",
+                route = "scanner/concert/{concertId}",
                 arguments = listOf(navArgument("concertId") { type = NavType.StringType }),
             ) { entry ->
                 val concertId = entry.arguments?.getString("concertId")
@@ -43,6 +46,21 @@ fun KoraNavHost(app: KoraScannerApp) {
                 val viewModel: ScannerViewModel = viewModel(
                     factory = ScannerViewModel.Factory(
                         concertId = concertId,
+                        purpose = ScannerPurpose.Concert,
+                        repository = app.scanRepository,
+                        networkMonitor = app.networkMonitor,
+                    ),
+                )
+                ScannerScreen(
+                    viewModel = viewModel,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable("scanner/digital-id") {
+                val viewModel: ScannerViewModel = viewModel(
+                    factory = ScannerViewModel.Factory(
+                        concertId = null,
+                        purpose = ScannerPurpose.DigitalId,
                         repository = app.scanRepository,
                         networkMonitor = app.networkMonitor,
                     ),

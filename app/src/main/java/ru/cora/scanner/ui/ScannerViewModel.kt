@@ -4,10 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import ru.cora.scanner.data.ApiErrorMessages
@@ -25,15 +23,17 @@ data class ScannerUiState(
     val ticketsReady: Boolean = false,
     val redeemedCount: Int = 0,
     val concertTitle: String? = null,
+    val purpose: ScannerPurpose = ScannerPurpose.Concert,
 )
 
 class ScannerViewModel(
-    private val concertId: String,
+    private val concertId: String?,
+    private val purpose: ScannerPurpose,
     private val repository: ConcertScanRepository,
     networkMonitor: NetworkMonitor,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(ScannerUiState())
+    private val _uiState = MutableStateFlow(ScannerUiState(purpose = purpose))
     val uiState: StateFlow<ScannerUiState> = _uiState.asStateFlow()
 
     init {
@@ -45,16 +45,26 @@ class ScannerViewModel(
                 }
             }
         }
-        viewModelScope.launch {
-            repository.observeRedeemedCount(concertId).collect { count ->
-                _uiState.update { it.copy(redeemedCount = count) }
+        if (purpose == ScannerPurpose.Concert && concertId != null) {
+            viewModelScope.launch {
+                repository.observeRedeemedCount(concertId).collect { count ->
+                    _uiState.update { it.copy(redeemedCount = count) }
+                }
+            }
+            viewModelScope.launch {
+                val title = repository.getConcertTitle(concertId)
+                _uiState.update { it.copy(concertTitle = title) }
+            }
+            loadTickets()
+        }
+        if (purpose == ScannerPurpose.DigitalId) {
+            _uiState.update {
+                it.copy(
+                    concertTitle = "Цифровой ID",
+                    statusMessage = "Покажите QR из Госкан или мессенджера с цифровым ID. Проверка через Госуслуги будет подключена позже.",
+                )
             }
         }
-        viewModelScope.launch {
-            val title = repository.getConcertTitle(concertId)
-            _uiState.update { it.copy(concertTitle = title) }
-        }
-        loadTickets()
     }
 
     fun onBarcodeDetected(raw: String) {
@@ -69,7 +79,7 @@ class ScannerViewModel(
                     concertId = concertId,
                     raw = raw,
                     isOnline = state.isOnline,
-                    modeDigitalId = false,
+                    modeDigitalId = purpose == ScannerPurpose.DigitalId,
                 )
             }.onSuccess { ticket ->
                 _uiState.update {
@@ -83,7 +93,7 @@ class ScannerViewModel(
                 _uiState.update {
                     it.copy(
                         isProcessing = false,
-                        errorMessage = "Не удалось прочитать билет. Попробуйте ещё раз.",
+                        errorMessage = "Не удалось прочитать код. Попробуйте ещё раз.",
                     )
                 }
             }
@@ -95,9 +105,10 @@ class ScannerViewModel(
     }
 
     fun loadTickets() {
+        val id = concertId ?: return
         viewModelScope.launch {
             _uiState.update { it.copy(statusMessage = "Загружаем билеты…") }
-            repository.loadManifest(concertId)
+            repository.loadManifest(id)
                 .onSuccess { result ->
                     _uiState.update {
                         it.copy(
@@ -105,7 +116,7 @@ class ScannerViewModel(
                             statusMessage = if (result.placeCount > 0) {
                                 "Билеты загружены — можно сканировать"
                             } else {
-                                "Для этого концерта пока нет билетов в системе"
+                                "Для этого концерта пока нет билетов в системе. Можно загрузить файл со сторонними билетами."
                             },
                         )
                     }
@@ -115,7 +126,30 @@ class ScannerViewModel(
                         it.copy(
                             ticketsReady = false,
                             statusMessage = ApiErrorMessages.forUser(error) +
-                                " Нажмите «Обновить билеты».",
+                                " Можно загрузить файл со сторонними билетами.",
+                        )
+                    }
+                }
+        }
+    }
+
+    fun importTicketsFile(fileContent: String) {
+        val id = concertId ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(statusMessage = "Загружаем билеты из файла…") }
+            repository.importExternalBarcodesJson(id, fileContent)
+                .onSuccess { count ->
+                    _uiState.update {
+                        it.copy(
+                            ticketsReady = true,
+                            statusMessage = "Загружено билетов из файла: $count. Можно сканировать.",
+                        )
+                    }
+                }
+                .onFailure {
+                    _uiState.update {
+                        it.copy(
+                            statusMessage = "Не удалось прочитать файл. Нужен JSON: список кодов или объектов с полем barcode.",
                         )
                     }
                 }
@@ -123,13 +157,14 @@ class ScannerViewModel(
     }
 
     class Factory(
-        private val concertId: String,
+        private val concertId: String?,
+        private val purpose: ScannerPurpose,
         private val repository: ConcertScanRepository,
         private val networkMonitor: NetworkMonitor,
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return ScannerViewModel(concertId, repository, networkMonitor) as T
+            return ScannerViewModel(concertId, purpose, repository, networkMonitor) as T
         }
     }
 }
