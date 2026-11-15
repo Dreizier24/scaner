@@ -19,7 +19,11 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField("String", "API_BASE_URL", "\"https://co-ra.ru/api/v1/\"")
+        buildConfigField(
+            "String",
+            "API_BASE_URL",
+            "\"https://37.252.21.72.nip.io/scanner/api/v1/\"",
+        )
     }
 
     buildTypes {

@@ -13,6 +13,17 @@
 
 Каталог [`server/`](server/): FastAPI + SQLite, тестовые концерты и билеты. Запуск: `server\run.bat` или см. [server/README.md](server/README.md).
 
+### Развёрнутый API (подключение приложения)
+
+| Назначение | URL |
+|------------|-----|
+| База API | `https://37.252.21.72.nip.io/scanner/api/v1/` |
+| Health | `https://37.252.21.72.nip.io/scanner/health` |
+| Концерты | `https://37.252.21.72.nip.io/scanner/api/v1/concerts` |
+| Swagger | `https://37.252.21.72.nip.io/scanner/docs` |
+
+URL зашит в `app/build.gradle.kts` → `BuildConfig.API_BASE_URL`. После смены адреса пересоберите APK.
+
 ## Запуск приложения
 
 1. Откройте папку проекта в **Android Studio** (Ladybug или новее).
