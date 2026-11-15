@@ -1,5 +1,6 @@
 package ru.cora.scanner.ui.concert
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -24,12 +25,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.cora.scanner.data.local.entity.ConcertEntity
 import ru.cora.scanner.ui.components.KoraTopBar
+import ru.cora.scanner.ui.theme.KoraCream
 
 @Composable
 fun ConcertListScreen(
     viewModel: ConcertListViewModel,
     onConcertSelected: (String) -> Unit,
-    onQuickScan: () -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val concerts by viewModel.concerts.collectAsStateWithLifecycle()
@@ -38,10 +39,14 @@ fun ConcertListScreen(
         viewModel.refreshConcerts()
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(KoraCream),
+    ) {
         KoraTopBar(
             title = "КОРА",
-            subtitle = "Выбор концерта",
+            subtitle = "Выберите концерт",
             isOnline = uiState.isOnline,
         )
 
@@ -51,20 +56,18 @@ fun ConcertListScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            Text(
+                text = "Нажмите на мероприятие, чтобы проверять билеты на входе.",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+
             Button(
                 onClick = viewModel::refreshConcerts,
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !uiState.isLoading,
             ) {
                 Icon(Icons.Default.Refresh, contentDescription = null)
-                Text(text = "  Обновить список с API", modifier = Modifier.padding(start = 4.dp))
-            }
-
-            Button(
-                onClick = onQuickScan,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Скан без выбора концерта")
+                Text(text = "  Обновить список концертов", modifier = Modifier.padding(start = 4.dp))
             }
 
             uiState.message?.let {
@@ -73,6 +76,14 @@ fun ConcertListScreen(
 
             if (uiState.isLoading) {
                 CircularProgressIndicator()
+            }
+
+            if (!uiState.isLoading && concerts.isEmpty()) {
+                Text(
+                    text = "Концерты не загружены. Нажмите кнопку обновления выше.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
 
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -103,11 +114,6 @@ private fun ConcertCard(concert: ConcertEntity, onClick: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Text(
-                text = "Мест в кэше: rev ${concert.manifestRevision}",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }

@@ -39,6 +39,9 @@ class ConcertScanRepository(
     val recentScans: Flow<List<ScanHistoryEntity>> = scanHistoryDao.observeRecent()
     val concerts: Flow<List<ConcertEntity>> = concertDao.observeAll()
 
+    suspend fun getConcertTitle(concertId: String): String? =
+        concertDao.findById(concertId)?.title
+
     fun observeRedeemedCount(concertId: String) = placeTicketDao.observeRedeemedCount(concertId)
 
     suspend fun refreshConcerts() = manifestSyncManager.refreshConcerts()

@@ -7,9 +7,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import ru.cora.scanner.data.ApiErrorMessages
 import ru.cora.scanner.data.ConcertScanRepository
 import ru.cora.scanner.data.NetworkMonitor
 import ru.cora.scanner.data.local.entity.ConcertEntity
@@ -41,21 +43,43 @@ class ConcertListViewModel(
 
     fun refreshConcerts() {
         viewModelScope.launch {
+            if (!_uiState.value.isOnline) {
+                val cached = concerts.first()
+                _uiState.update {
+                    it.copy(
+                        message = if (cached.isNotEmpty()) {
+                            "Нет интернета. Показан сохранённый список."
+                        } else {
+                            "Нет интернета. Включите Wi‑Fi или мобильную сеть."
+                        },
+                    )
+                }
+                return@launch
+            }
+
             _uiState.update { it.copy(isLoading = true, message = null) }
             repository.refreshConcerts()
                 .onSuccess { count ->
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            message = if (count > 0) "Концертов: $count" else "Список пуст (подключите API)",
+                            message = when {
+                                count > 0 -> "Список обновлён"
+                                else -> "Сейчас нет запланированных концертов"
+                            },
                         )
                     }
                 }
-                .onFailure {
+                .onFailure { error ->
+                    val cached = concerts.first()
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            message = "Не удалось загрузить концерты",
+                            message = if (cached.isNotEmpty()) {
+                                "${ApiErrorMessages.forUser(error)} Показан сохранённый список."
+                            } else {
+                                ApiErrorMessages.forUser(error)
+                            },
                         )
                     }
                 }

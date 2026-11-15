@@ -9,8 +9,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,29 +19,20 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Upload
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,19 +54,15 @@ import ru.cora.scanner.ui.theme.KoraBurgundy
 import ru.cora.scanner.ui.theme.KoraCream
 import ru.cora.scanner.ui.theme.KoraGold
 
-@OptIn(ExperimentalPermissionsApi::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun ScannerScreen(
     viewModel: ScannerViewModel,
-    concertId: String?,
     onBack: () -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val history by viewModel.history.collectAsStateWithLifecycle()
     val cameraPermission = rememberPermissionState(Manifest.permission.CAMERA)
     val context = LocalContext.current
-    var showImportDialog by remember { mutableStateOf(false) }
-    var importJson by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         if (!cameraPermission.status.isGranted) {
@@ -85,50 +70,10 @@ fun ScannerScreen(
         }
     }
 
-    LaunchedEffect(concertId) {
-        if (concertId != null) {
-            viewModel.loadManifest()
-        }
-    }
-
     LaunchedEffect(uiState.lastTicket?.rawPayload) {
         if (uiState.lastTicket != null) {
             vibrateSuccess(context)
         }
-    }
-
-    if (showImportDialog) {
-        AlertDialog(
-            onDismissRequest = { showImportDialog = false },
-            title = { Text("Сторонние штрихкоды") },
-            text = {
-                Column {
-                    Text(
-                        text = "Вставьте JSON-массив: barcode, row, seat, sector, isPushkin",
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                    OutlinedTextField(
-                        value = importJson,
-                        onValueChange = { importJson = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp),
-                        minLines = 4,
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.importExternalBarcodes(importJson)
-                        showImportDialog = false
-                    },
-                ) { Text("Импорт") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showImportDialog = false }) { Text("Отмена") }
-            },
-        )
     }
 
     Column(
@@ -139,7 +84,7 @@ fun ScannerScreen(
         Box {
             KoraTopBar(
                 title = "КОРА",
-                subtitle = if (concertId != null) "Контроль входа" else "Сканер билетов",
+                subtitle = uiState.concertTitle ?: "Проверка билетов",
                 isOnline = uiState.isOnline,
             )
             IconButton(
@@ -163,24 +108,22 @@ fun ScannerScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = uiState.mode == ScannerMode.Ticket,
-                    onClick = { viewModel.setMode(ScannerMode.Ticket) },
-                    label = { Text("Билеты") },
-                )
-                FilterChip(
-                    selected = uiState.mode == ScannerMode.DigitalId,
-                    onClick = { viewModel.setMode(ScannerMode.DigitalId) },
-                    label = { Text("Цифровой ID") },
+            uiState.statusMessage?.let { message ->
+                Text(text = message, style = MaterialTheme.typography.bodyLarge)
+            }
+
+            if (uiState.redeemedCount > 0) {
+                Text(
+                    text = "Уже прошли: ${uiState.redeemedCount}",
+                    style = MaterialTheme.typography.bodyLarge,
                 )
             }
 
-            if (concertId != null) {
-                Text(
-                    text = "Погашено (кэш): ${uiState.redeemedCount}",
-                    style = MaterialTheme.typography.bodyLarge,
-                )
+            OutlinedButton(
+                onClick = viewModel::loadTickets,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Обновить билеты")
             }
 
             Card(
@@ -218,7 +161,7 @@ fun ScannerScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Text(
-                                text = "Нужен доступ к камере",
+                                text = "Для сканирования нужен доступ к камере",
                                 style = MaterialTheme.typography.bodyLarge,
                             )
                             Spacer(modifier = Modifier.height(12.dp))
@@ -241,51 +184,19 @@ fun ScannerScreen(
                 }
             }
 
+            if (!uiState.scanPaused) {
+                Text(
+                    text = "Наведите камеру на QR-код или штрихкод билета",
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+            }
+
             uiState.errorMessage?.let { message ->
                 Text(text = message, color = MaterialTheme.colorScheme.error)
             }
 
-            uiState.syncMessage?.let { message ->
-                Text(text = message, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-
             uiState.lastTicket?.let { ticket ->
                 TicketResultCard(ticket = ticket, onScanAgain = viewModel::resumeScanning)
-            }
-
-            if (concertId != null) {
-                OutlinedButton(
-                    onClick = viewModel::loadManifest,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(Icons.Default.CloudDownload, contentDescription = null)
-                    Text(text = "  Загрузить манифест мест (API)", modifier = Modifier.padding(start = 4.dp))
-                }
-                OutlinedButton(
-                    onClick = { showImportDialog = true },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(Icons.Default.Upload, contentDescription = null)
-                    Text(text = "  Импорт сторонних штрихкодов (JSON)", modifier = Modifier.padding(start = 4.dp))
-                }
-            }
-
-            if (!uiState.scanPaused) {
-                Text(
-                    text = "QR / Code128 / EAN / PDF417 и др.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-
-            if (history.isNotEmpty()) {
-                HistorySection(
-                    history.map { item ->
-                        val place = listOfNotNull(item.rowLabel, item.seatLabel).joinToString(", ")
-                        val title = item.eventTitle ?: item.rawPayload.take(32)
-                        if (place.isNotEmpty()) "$title — $place" else title
-                    },
-                )
             }
         }
     }
@@ -313,22 +224,22 @@ private fun TicketResultCard(
             }
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = ticket.eventTitle ?: "Результат сканирования",
+                text = ticket.eventTitle ?: "Билет",
                 style = MaterialTheme.typography.titleLarge,
             )
-            InfoRow("Ряд", ticket.row)
-            InfoRow("Место", ticket.seat)
+            val rowSeat = listOfNotNull(
+                ticket.row?.let { "ряд $it" },
+                ticket.seat?.let { "место $it" },
+            ).joinToString(", ")
+            if (rowSeat.isNotBlank()) {
+                Text(
+                    text = rowSeat.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() },
+                    style = MaterialTheme.typography.headlineMedium,
+                )
+            }
             InfoRow("Сектор", ticket.sector)
-            InfoRow("ID места", ticket.placeId ?: ticket.ticketId)
             InfoRow("Площадка", ticket.venue)
             InfoRow("Дата и время", ticket.dateTime)
-            InfoRow("Посетитель", ticket.holderName)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Тип: ${ticket.ticketKind.name} · ${ticket.source.name}",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
             Spacer(modifier = Modifier.height(12.dp))
             Button(
                 onClick = onScanAgain,
@@ -336,26 +247,7 @@ private fun TicketResultCard(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Icon(Icons.Default.Refresh, contentDescription = null)
-                Text(text = "  Сканировать следующий", modifier = Modifier.padding(start = 4.dp))
-            }
-        }
-    }
-}
-
-@Composable
-private fun HistorySection(items: List<String>) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = "Последние сканы", style = MaterialTheme.typography.titleLarge)
-            items.take(5).forEach { line ->
-                Text(
-                    text = "• $line",
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(top = 6.dp),
-                )
+                Text(text = "  Проверить следующий билет", modifier = Modifier.padding(start = 4.dp))
             }
         }
     }

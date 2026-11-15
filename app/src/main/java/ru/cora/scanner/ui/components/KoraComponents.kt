@@ -58,7 +58,9 @@ fun KoraTopBar(
                     style = MaterialTheme.typography.bodyLarge,
                     color = Color(0xFFF2E8EC),
                 )
-                NetworkBadge(isOnline = isOnline)
+                if (!isOnline) {
+                    NetworkBadge(isOnline = false)
+                }
             }
         }
     }
@@ -73,7 +75,7 @@ fun NetworkBadge(isOnline: Boolean) {
             .clip(RoundedCornerShape(999.dp))
             .background(bg)
             .padding(horizontal = 10.dp, vertical = 4.dp),
-        text = if (isOnline) "Онлайн" else "Офлайн",
+        text = "Нет сети",
         style = MaterialTheme.typography.labelLarge,
         color = fg,
         fontWeight = FontWeight.SemiBold,
@@ -87,8 +89,8 @@ fun StatusChip(status: ValidationStatus) {
         ValidationStatus.AlreadyUsed -> "Уже использован" to KoraWarning
         ValidationStatus.NotFound -> "Не найден" to KoraError
         ValidationStatus.Expired -> "Просрочен" to KoraError
-        ValidationStatus.PendingSync -> "Ожидает синхронизации" to KoraWarning
-        ValidationStatus.Unknown -> "Требует проверки" to KoraMuted
+        ValidationStatus.PendingSync -> "Запишется при появлении сети" to KoraWarning
+        ValidationStatus.Unknown -> "Нужна проверка" to KoraMuted
     }
     Text(
         modifier = Modifier

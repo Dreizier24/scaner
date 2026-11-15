@@ -10,15 +10,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import ru.cora.scanner.data.ApiErrorMessages
 import ru.cora.scanner.data.ConcertScanRepository
 import ru.cora.scanner.data.NetworkMonitor
-import ru.cora.scanner.data.local.entity.ScanHistoryEntity
 import ru.cora.scanner.domain.model.TicketInfo
-
-enum class ScannerMode {
-    Ticket,
-    DigitalId,
-}
 
 data class ScannerUiState(
     val isOnline: Boolean = true,
@@ -26,23 +21,20 @@ data class ScannerUiState(
     val lastTicket: TicketInfo? = null,
     val errorMessage: String? = null,
     val scanPaused: Boolean = false,
-    val syncMessage: String? = null,
-    val manifestLoaded: Int? = null,
+    val statusMessage: String? = null,
+    val ticketsReady: Boolean = false,
     val redeemedCount: Int = 0,
-    val mode: ScannerMode = ScannerMode.Ticket,
+    val concertTitle: String? = null,
 )
 
 class ScannerViewModel(
-    private val concertId: String?,
+    private val concertId: String,
     private val repository: ConcertScanRepository,
     networkMonitor: NetworkMonitor,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ScannerUiState())
     val uiState: StateFlow<ScannerUiState> = _uiState.asStateFlow()
-
-    val history: StateFlow<List<ScanHistoryEntity>> = repository.recentScans
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     init {
         viewModelScope.launch {
@@ -53,17 +45,16 @@ class ScannerViewModel(
                 }
             }
         }
-        if (concertId != null) {
-            viewModelScope.launch {
-                repository.observeRedeemedCount(concertId).collect { count ->
-                    _uiState.update { it.copy(redeemedCount = count) }
-                }
+        viewModelScope.launch {
+            repository.observeRedeemedCount(concertId).collect { count ->
+                _uiState.update { it.copy(redeemedCount = count) }
             }
         }
-    }
-
-    fun setMode(mode: ScannerMode) {
-        _uiState.update { it.copy(mode = mode) }
+        viewModelScope.launch {
+            val title = repository.getConcertTitle(concertId)
+            _uiState.update { it.copy(concertTitle = title) }
+        }
+        loadTickets()
     }
 
     fun onBarcodeDetected(raw: String) {
@@ -78,7 +69,7 @@ class ScannerViewModel(
                     concertId = concertId,
                     raw = raw,
                     isOnline = state.isOnline,
-                    modeDigitalId = state.mode == ScannerMode.DigitalId,
+                    modeDigitalId = false,
                 )
             }.onSuccess { ticket ->
                 _uiState.update {
@@ -88,11 +79,11 @@ class ScannerViewModel(
                         scanPaused = true,
                     )
                 }
-            }.onFailure { error ->
+            }.onFailure {
                 _uiState.update {
                     it.copy(
                         isProcessing = false,
-                        errorMessage = error.message ?: "Не удалось обработать код",
+                        errorMessage = "Не удалось прочитать билет. Попробуйте ещё раз.",
                     )
                 }
             }
@@ -103,50 +94,36 @@ class ScannerViewModel(
         _uiState.update { it.copy(scanPaused = false, lastTicket = null, errorMessage = null) }
     }
 
-    fun loadManifest() {
-        val id = concertId ?: return
+    fun loadTickets() {
         viewModelScope.launch {
-            _uiState.update { it.copy(syncMessage = null) }
-            repository.loadManifest(id)
+            _uiState.update { it.copy(statusMessage = "Загружаем билеты…") }
+            repository.loadManifest(concertId)
                 .onSuccess { result ->
                     _uiState.update {
                         it.copy(
-                            manifestLoaded = result.placeCount,
-                            syncMessage = if (result.skippedDownload) {
-                                "Манифест актуален (rev ${result.revision})"
+                            ticketsReady = true,
+                            statusMessage = if (result.placeCount > 0) {
+                                "Билеты загружены — можно сканировать"
                             } else {
-                                "Загружено мест: ${result.placeCount}"
+                                "Для этого концерта пока нет билетов в системе"
                             },
                         )
                     }
                 }
-                .onFailure {
+                .onFailure { error ->
                     _uiState.update {
-                        it.copy(syncMessage = "Не удалось загрузить манифест (API ещё не подключён)")
-                    }
-                }
-        }
-    }
-
-    fun importExternalBarcodes(json: String) {
-        val id = concertId ?: return
-        viewModelScope.launch {
-            repository.importExternalBarcodesJson(id, json)
-                .onSuccess { count ->
-                    _uiState.update {
-                        it.copy(syncMessage = "Импортировано штрихкодов: $count")
-                    }
-                }
-                .onFailure {
-                    _uiState.update {
-                        it.copy(syncMessage = "Ошибка импорта: проверьте JSON")
+                        it.copy(
+                            ticketsReady = false,
+                            statusMessage = ApiErrorMessages.forUser(error) +
+                                " Нажмите «Обновить билеты».",
+                        )
                     }
                 }
         }
     }
 
     class Factory(
-        private val concertId: String?,
+        private val concertId: String,
         private val repository: ConcertScanRepository,
         private val networkMonitor: NetworkMonitor,
     ) : ViewModelProvider.Factory {

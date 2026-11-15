@@ -50,7 +50,6 @@ class NetworkMonitor(context: Context) {
 
     private fun hasInternet(network: Network): Boolean {
         val caps = connectivityManager.getNetworkCapabilities(network) ?: return false
-        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
 }
