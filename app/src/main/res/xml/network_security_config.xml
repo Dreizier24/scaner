@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Доверяем сертификату API КОРА, если на nginx не отдан fullchain (типичная причина
+  ошибки SSL на Android). После продления Let's Encrypt (~2027) обновите kora_api_leaf.cer
+  или настройте на сервере ssl_certificate fullchain.pem.
+-->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
@@ -6,9 +11,11 @@
         </trust-anchors>
     </base-config>
     <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">37.252.21.72.nip.io</domain>
         <domain includeSubdomains="true">nip.io</domain>
         <trust-anchors>
             <certificates src="system" />
+            <certificates src="@raw/kora_api_leaf" />
         </trust-anchors>
     </domain-config>
 </network-security-config>

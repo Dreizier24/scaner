@@ -1,6 +1,8 @@
 package ru.cora.scanner
 
 import android.app.Application
+import java.security.Security
+import org.conscrypt.Conscrypt
 import androidx.room.Room
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json
@@ -31,6 +33,10 @@ class KoraScannerApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+
+        runCatching {
+            Security.insertProviderAt(Conscrypt.newProvider(), 1)
+        }
 
         val database = Room.databaseBuilder(
             this,

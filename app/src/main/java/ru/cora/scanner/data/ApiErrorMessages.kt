@@ -11,7 +11,7 @@ object ApiErrorMessages {
     fun forUser(throwable: Throwable): String = when (throwable) {
         is UnknownHostException -> "Нет связи с сервером. Проверьте интернет."
         is SocketTimeoutException -> "Сервер не отвечает. Попробуйте чуть позже."
-        is SSLException -> "Не удалось установить защищённое соединение. Обновите приложение или обратитесь в кассу."
+        is SSLException -> "Не удалось подключиться к серверу билетов. Проверьте интернет или обратитесь в кассу."
         is IOException -> "Проблема с сетью. Проверьте Wi‑Fi или мобильный интернет."
         is HttpException -> when (throwable.code()) {
             in 500..599 -> "Сервер временно недоступен. Попробуйте позже."
