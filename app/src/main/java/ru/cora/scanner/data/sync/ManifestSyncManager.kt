@@ -19,13 +19,27 @@ class ManifestSyncManager(
     suspend fun refreshConcerts(): Result<Int> = runCatching {
         val response = api.listConcerts()
         val now = System.currentTimeMillis()
-        val entities = response.concerts.map { it.toEntity(now, manifestRevision = 0) }
+        val entities = response.concerts.map { dto ->
+            val prev = database.concertDao().findById(dto.id)
+            dto.toEntity(now, manifestRevision = prev?.manifestRevision ?: 0).copy(
+                ticketsLoadedAtEpochMs = prev?.ticketsLoadedAtEpochMs,
+                source = prev?.source ?: ConcertEntity.SOURCE_API,
+            )
+        }
         database.concertDao().upsertAll(entities)
         entities.size
     }
 
     suspend fun syncManifest(concertId: String): Result<ManifestSyncResult> = runCatching {
         val local = database.concertDao().findById(concertId)
+        if (local?.source == ru.cora.scanner.data.local.entity.ConcertEntity.SOURCE_FILE) {
+            val count = database.placeTicketDao().countForConcert(concertId)
+            return@runCatching ManifestSyncResult(
+                placeCount = count,
+                revision = local.manifestRevision,
+                skippedDownload = true,
+            )
+        }
         val since = local?.manifestRevision?.takeIf { it > 0 }
         val response = api.getManifest(concertId, since)
 
@@ -66,6 +80,7 @@ class ManifestSyncManager(
                 concertMeta.copy(
                     manifestRevision = response.revision,
                     lastSyncedAtEpochMs = now,
+                    ticketsLoadedAtEpochMs = now,
                 ),
             )
             database.placeTicketDao().upsertAll(places)
@@ -90,6 +105,7 @@ class ManifestSyncManager(
         dateTime = dateTime,
         manifestRevision = manifestRevision,
         lastSyncedAtEpochMs = now,
+        source = ConcertEntity.SOURCE_API,
     )
 
     private fun PlaceManifestDto.toEntity(concertId: String) = PlaceTicketEntity(

@@ -12,7 +12,15 @@ data class ConcertEntity(
     val dateTime: String?,
     val manifestRevision: Long,
     val lastSyncedAtEpochMs: Long,
-)
+    /** Момент последней загрузки билетов на устройство; сбрасывается после полуночи. */
+    val ticketsLoadedAtEpochMs: Long? = null,
+    val source: String = SOURCE_API,
+) {
+    companion object {
+        const val SOURCE_API = "api"
+        const val SOURCE_FILE = "file"
+    }
+}
 
 @Entity(
     tableName = "place_tickets",

@@ -1,0 +1,20 @@
+{
+  "title": "Фестиваль — гостевой вход",
+  "venue": "Дворец культуры",
+  "dateTime": "20.12.2026 18:00",
+  "tickets": [
+    {
+      "barcode": "PARTNER-TICKET-01",
+      "row": "2",
+      "seat": "5",
+      "sector": "Партер"
+    },
+    {
+      "barcode": "PARTNER-TICKET-02",
+      "row": "2",
+      "seat": "6",
+      "sector": "Партер",
+      "isPushkin": false
+    }
+  ]
+}

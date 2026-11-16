@@ -13,6 +13,8 @@ import androidx.navigation.navArgument
 import ru.cora.scanner.KoraScannerApp
 import ru.cora.scanner.ui.concert.ConcertListScreen
 import ru.cora.scanner.ui.concert.ConcertListViewModel
+import ru.cora.scanner.ui.settings.ScannerSettingsScreen
+import ru.cora.scanner.ui.settings.ScannerSettingsViewModel
 
 @Composable
 fun KoraNavHost(app: KoraScannerApp) {
@@ -35,6 +37,19 @@ fun KoraNavHost(app: KoraScannerApp) {
                     onDigitalIdScan = {
                         navController.navigate("scanner/digital-id")
                     },
+                    onOpenSettings = { navController.navigate("settings") },
+                )
+            }
+            composable("settings") {
+                val viewModel: ScannerSettingsViewModel = viewModel(
+                    factory = ScannerSettingsViewModel.Factory(
+                        preferences = app.scannerPreferences,
+                        networkMonitor = app.networkMonitor,
+                    ),
+                )
+                ScannerSettingsScreen(
+                    viewModel = viewModel,
+                    onBack = { navController.popBackStack() },
                 )
             }
             composable(
@@ -48,6 +63,8 @@ fun KoraNavHost(app: KoraScannerApp) {
                         concertId = concertId,
                         purpose = ScannerPurpose.Concert,
                         repository = app.scanRepository,
+                        preferences = app.scannerPreferences,
+                        redemptionWebSocket = app.redemptionWebSocket,
                         networkMonitor = app.networkMonitor,
                     ),
                 )
@@ -62,6 +79,8 @@ fun KoraNavHost(app: KoraScannerApp) {
                         concertId = null,
                         purpose = ScannerPurpose.DigitalId,
                         repository = app.scanRepository,
+                        preferences = app.scannerPreferences,
+                        redemptionWebSocket = null,
                         networkMonitor = app.networkMonitor,
                     ),
                 )

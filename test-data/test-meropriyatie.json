@@ -1,0 +1,39 @@
+{
+  "id": "test-meropriyatie-2026-11-15",
+  "title": "Тестовое мероприятие (импорт из файла)",
+  "venue": "КОРА — пробная площадка",
+  "dateTime": "15.11.2026 19:30",
+  "tickets": [
+    {
+      "barcode": "TEST-EVT-P-01-05",
+      "row": "1",
+      "seat": "5",
+      "sector": "Партер"
+    },
+    {
+      "barcode": "TEST-EVT-P-01-06",
+      "row": "1",
+      "seat": "6",
+      "sector": "Партер"
+    },
+    {
+      "barcode": "TEST-EVT-BAL-12",
+      "row": "3",
+      "seat": "12",
+      "sector": "Балкон"
+    },
+    {
+      "barcode": "PUSHKIN-TEST-7788",
+      "row": "5",
+      "seat": "8",
+      "sector": "Партер",
+      "isPushkin": true
+    },
+    {
+      "barcode": "GUEST-NO-PLACE-001"
+    },
+    {
+      "barcode": "4609988776655"
+    }
+  ]
+}

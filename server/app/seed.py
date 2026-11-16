@@ -86,6 +86,61 @@ def insert_place(
         )
 
 
+def ensure_loadtest_concert(conn: sqlite3.Connection, ticket_count: int = 2000) -> None:
+    """Демо-событие с большим числом билетов (для проверки sync/сканера)."""
+    cid = "c-loadtest-2000"
+    row = conn.execute(
+        "SELECT COUNT(*) AS c FROM places WHERE concert_id = ?",
+        (cid,),
+    ).fetchone()
+    if int(row["c"]) >= ticket_count:
+        return
+
+    conn.execute("DELETE FROM barcodes WHERE concert_id = ?", (cid,))
+    conn.execute("DELETE FROM places WHERE concert_id = ?", (cid,))
+    conn.execute("DELETE FROM concerts WHERE id = ?", (cid,))
+
+    conn.execute(
+        """
+        INSERT INTO concerts (id, title, venue, date_time, revision)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            cid,
+            "Нагрузочный тест — 2000 мест",
+            "г. Майкоп, ДК",
+            "01.12.2026 19:00",
+            1,
+        ),
+    )
+
+    places: list[tuple] = []
+    codes: list[tuple] = []
+    for i in range(ticket_count):
+        pid = f"p-load-{i:05d}"
+        row_n = str((i // 50) + 1)
+        seat_n = str((i % 50) + 1)
+        barcode = f"LOAD2000-{i:05d}"
+        places.append((cid, pid, row_n, seat_n, "Партер", 0))
+        codes.append((barcode, cid, pid, "seed"))
+
+    conn.executemany(
+        """
+        INSERT INTO places (concert_id, place_id, row_label, seat_label, sector, is_pushkin, is_redeemed)
+        VALUES (?, ?, ?, ?, ?, ?, 0)
+        """,
+        places,
+    )
+    conn.executemany(
+        """
+        INSERT INTO barcodes (barcode, concert_id, place_id, source)
+        VALUES (?, ?, ?, ?)
+        """,
+        codes,
+    )
+    bump_revision(conn, cid)
+
+
 def bump_revision(conn: sqlite3.Connection, concert_id: str) -> int:
     conn.execute(
         "UPDATE concerts SET revision = revision + 1 WHERE id = ?",

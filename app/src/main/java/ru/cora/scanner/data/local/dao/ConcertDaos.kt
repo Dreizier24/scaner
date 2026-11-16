@@ -19,6 +19,9 @@ interface ConcertDao {
     @Query("SELECT * FROM concerts WHERE concertId = :id LIMIT 1")
     suspend fun findById(id: String): ConcertEntity?
 
+    @Query("SELECT * FROM concerts")
+    suspend fun listAll(): List<ConcertEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(concert: ConcertEntity)
 
@@ -37,6 +40,9 @@ interface PlaceTicketDao {
     @Query("SELECT COUNT(*) FROM place_tickets WHERE concertId = :concertId AND isRedeemed = 1")
     fun observeRedeemedCount(concertId: String): Flow<Int>
 
+    @Query("SELECT COUNT(*) FROM place_tickets WHERE concertId = :concertId")
+    fun observeTicketCount(concertId: String): Flow<Int>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(places: List<PlaceTicketEntity>)
 
@@ -48,6 +54,15 @@ interface PlaceTicketDao {
         """,
     )
     suspend fun markRedeemed(concertId: String, placeId: String, at: Long): Int
+
+    @Query(
+        """
+        UPDATE place_tickets
+        SET isRedeemed = 1, redeemedAtEpochMs = :at, pendingSync = 0
+        WHERE concertId = :concertId AND placeId = :placeId
+        """,
+    )
+    suspend fun applyRemoteRedemption(concertId: String, placeId: String, at: Long): Int
 
     @Query("DELETE FROM place_tickets WHERE concertId = :concertId")
     suspend fun deleteForConcert(concertId: String)
@@ -73,11 +88,20 @@ interface PendingRedemptionDao {
     @Query("SELECT * FROM pending_redemptions WHERE concertId = :concertId")
     suspend fun getForConcert(concertId: String): List<PendingRedemptionEntity>
 
+    @Query("SELECT COUNT(*) FROM pending_redemptions WHERE concertId = :concertId")
+    fun observePendingCount(concertId: String): Flow<Int>
+
     @Insert
     suspend fun insert(entry: PendingRedemptionEntity)
 
     @Query("DELETE FROM pending_redemptions WHERE id = :id")
     suspend fun delete(id: Long)
+
+    @Query("DELETE FROM pending_redemptions WHERE concertId = :concertId AND placeId = :placeId")
+    suspend fun deleteForPlace(concertId: String, placeId: String)
+
+    @Query("DELETE FROM pending_redemptions WHERE concertId = :concertId")
+    suspend fun deleteForConcert(concertId: String)
 }
 
 @Dao

@@ -78,8 +78,9 @@ def apply_redemptions(
     conn: sqlite3.Connection,
     concert_id: str,
     items: list,
-) -> int:
+) -> tuple[int, list[dict]]:
     accepted = 0
+    events: list[dict] = []
     now = int(time.time() * 1000)
 
     for item in items:
@@ -118,13 +119,22 @@ def apply_redemptions(
             ),
         )
         accepted += 1
+        events.append(
+            {
+                "type": "redemption",
+                "concertId": concert_id,
+                "placeId": item.placeId,
+                "barcode": item.barcode,
+                "scannedAtEpochMs": item.scannedAtEpochMs or now,
+            }
+        )
 
     if accepted > 0:
         bump_revision(conn, concert_id)
     else:
         conn.commit()
 
-    return accepted
+    return accepted, events
 
 
 def import_barcodes(conn: sqlite3.Connection, concert_id: str, rows: list) -> int:

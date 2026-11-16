@@ -1,6 +1,6 @@
 import time
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import get_connection, init_db
@@ -20,7 +20,8 @@ from app.schemas import (
     ValidateTicketRequest,
     ValidateTicketResponse,
 )
-from app.seed import seed_if_empty
+from app.seed import ensure_loadtest_concert, seed_if_empty
+from app.ws_hub import ws_hub
 
 app = FastAPI(
     title="КОРА Scanner API",
@@ -39,6 +40,7 @@ app.add_middleware(
 _conn = get_connection()
 init_db(_conn)
 seed_if_empty(_conn)
+ensure_loadtest_concert(_conn)
 
 
 def db():
@@ -78,12 +80,23 @@ def sync_state(concert_id: str):
     f"{API_PREFIX}/concerts/{{concert_id}}/redemptions/sync",
     response_model=RedemptionSyncResponse,
 )
-def sync_redemptions(concert_id: str, body: RedemptionSyncRequest):
+async def sync_redemptions(concert_id: str, body: RedemptionSyncRequest):
     if store.get_concert_revision(db(), concert_id) is None:
         raise HTTPException(status_code=404, detail="Концерт не найден")
-    accepted = store.apply_redemptions(db(), concert_id, body.items)
+    accepted, events = store.apply_redemptions(db(), concert_id, body.items)
+    for payload in events:
+        await ws_hub.broadcast_redemption(concert_id, payload)
     rev = store.get_concert_revision(db(), concert_id) or 1
     return RedemptionSyncResponse(accepted=accepted, serverRevision=rev)
+
+
+@app.websocket(f"{API_PREFIX}/ws/concerts/{{concert_id}}")
+async def concert_scan_feed(concert_id: str, websocket: WebSocket):
+    if store.get_concert_revision(db(), concert_id) is None:
+        await websocket.close(code=4404)
+        return
+    await ws_hub.connect(concert_id, websocket)
+    await ws_hub.keepalive_loop(concert_id, websocket)
 
 
 @app.post(

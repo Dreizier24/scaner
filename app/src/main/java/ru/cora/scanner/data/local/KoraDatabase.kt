@@ -30,7 +30,7 @@ import ru.cora.scanner.data.local.entity.ScanHistoryEntity
         PendingRedemptionEntity::class,
         AppSettingEntity::class,
     ],
-    version = 2,
+    version = 4,
     exportSchema = false,
 )
 abstract class KoraDatabase : RoomDatabase() {

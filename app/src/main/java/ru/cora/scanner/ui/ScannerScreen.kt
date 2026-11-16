@@ -1,42 +1,50 @@
 package ru.cora.scanner.ui
 
 import android.Manifest
-import android.net.Uri
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,16 +56,19 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import ru.cora.scanner.camera.QrCameraPreview
+import ru.cora.scanner.data.ScanDirection
 import ru.cora.scanner.domain.model.TicketInfo
 import ru.cora.scanner.domain.model.TicketKind
+import ru.cora.scanner.domain.model.ValidationStatus
 import ru.cora.scanner.ui.components.InfoRow
 import ru.cora.scanner.ui.components.KoraTopBar
+import ru.cora.scanner.ui.components.PassStatsRow
+import ru.cora.scanner.ui.components.ScanRepeatHistoryCard
+import ru.cora.scanner.ui.components.ScanResultPanel
 import ru.cora.scanner.ui.components.ScannerFrameOverlay
-import ru.cora.scanner.ui.components.StatusChip
 import ru.cora.scanner.ui.theme.KoraBurgundy
 import ru.cora.scanner.ui.theme.KoraCream
 import ru.cora.scanner.ui.theme.KoraGold
-import java.nio.charset.StandardCharsets
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -69,34 +80,28 @@ fun ScannerScreen(
     val cameraPermission = rememberPermissionState(Manifest.permission.CAMERA)
     val context = LocalContext.current
     val scrollState = rememberScrollState()
-
-    val filePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument(),
-    ) { uri: Uri? ->
-        uri ?: return@rememberLauncherForActivityResult
-        runCatching {
-            context.contentResolver.openInputStream(uri)?.use { stream ->
-                val text = stream.readBytes().toString(StandardCharsets.UTF_8)
-                viewModel.importTicketsFile(text)
-            }
-        }
-    }
+    var manualCode by rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         if (!cameraPermission.status.isGranted) {
             cameraPermission.launchPermissionRequest()
         }
+        viewModel.refreshPreferences()
     }
 
-    LaunchedEffect(uiState.lastTicket?.rawPayload) {
-        if (uiState.lastTicket != null) {
-            vibrateSuccess(context)
+    LaunchedEffect(uiState.lastTicket?.rawPayload, uiState.vibrationEnabled, uiState.soundEnabled) {
+        val ticket = uiState.lastTicket ?: return@LaunchedEffect
+        if (uiState.vibrationEnabled) {
+            vibrateResult(context, ticket.validationStatus)
+        }
+        if (uiState.soundEnabled) {
+            playScanTone(ticket.validationStatus)
         }
     }
 
     val subtitle = when (uiState.purpose) {
         ScannerPurpose.DigitalId -> "Цифровой ID"
-        ScannerPurpose.Concert -> uiState.concertTitle ?: "Проверка билетов"
+        ScannerPurpose.Concert -> uiState.concertTitle ?: "Сканирование"
     }
 
     Column(
@@ -108,7 +113,7 @@ fun ScannerScreen(
             KoraTopBar(
                 title = "КОРА",
                 subtitle = subtitle,
-                isOnline = uiState.isOnline,
+                isOnline = uiState.isOnline && !uiState.forceOffline,
             )
             IconButton(
                 onClick = onBack,
@@ -122,14 +127,27 @@ fun ScannerScreen(
                     tint = Color.White,
                 )
             }
+            if (uiState.purpose == ScannerPurpose.Concert) {
+                IconButton(
+                    onClick = viewModel::loadTickets,
+                    enabled = !uiState.isLoadingTickets,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp),
+                ) {
+                    Icon(Icons.Default.Sync, contentDescription = "Загрузить билеты", tint = Color.White)
+                }
+            }
         }
 
+        val canScanCamera = uiState.purpose != ScannerPurpose.Concert || uiState.ticketCount > 0
         CameraCard(
             cameraGranted = cameraPermission.status.isGranted,
             scanPaused = uiState.scanPaused,
             isProcessing = uiState.isProcessing,
+            autoScan = uiState.autoScan && canScanCamera,
             onRequestCamera = { cameraPermission.launchPermissionRequest() },
-            onBarcode = viewModel::onBarcodeDetected,
+            onBarcode = { viewModel.onBarcodeDetected(it, fromManual = false) },
         )
 
         Column(
@@ -137,79 +155,166 @@ fun ScannerScreen(
                 .weight(1f)
                 .fillMaxWidth()
                 .verticalScroll(scrollState)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            uiState.statusMessage?.let { message ->
-                Text(text = message, style = MaterialTheme.typography.bodyLarge)
-            }
-
-            if (uiState.purpose == ScannerPurpose.Concert && uiState.redeemedCount > 0) {
-                Text(
-                    text = "Уже прошли: ${uiState.redeemedCount}",
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-            }
-
             if (uiState.purpose == ScannerPurpose.Concert) {
-                OutlinedButton(
-                    onClick = viewModel::loadTickets,
+                Row(
                     modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text("Обновить билеты с сервера")
-                }
-                OutlinedButton(
-                    onClick = {
-                        filePicker.launch(
-                            arrayOf(
-                                "application/json",
-                                "text/plain",
-                                "application/*",
-                            ),
-                        )
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(Icons.Default.UploadFile, contentDescription = null)
-                    Text(
-                        text = "  Загрузить файл со сторонними билетами",
-                        modifier = Modifier.padding(start = 4.dp),
+                    FilterChip(
+                        selected = uiState.scanDirection == ScanDirection.Entry,
+                        onClick = { viewModel.setScanDirection(ScanDirection.Entry) },
+                        label = { Text("Вход") },
+                        modifier = Modifier.weight(1f),
+                    )
+                    FilterChip(
+                        selected = uiState.scanDirection == ScanDirection.Exit,
+                        onClick = { viewModel.setScanDirection(ScanDirection.Exit) },
+                        label = { Text("Выход") },
+                        modifier = Modifier.weight(1f),
                     )
                 }
-                Text(
-                    text = "Файл JSON: список кодов [\"код1\",\"код2\"] или объекты с полями barcode, row, seat.",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+
+                PassStatsRow(
+                    ticketsInDb = uiState.ticketCount,
+                    redeemed = uiState.redeemedCount,
+                    pendingSync = uiState.pendingSyncCount,
                 )
+
+                if (uiState.ticketCount == 0) {
+                    Button(
+                        onClick = viewModel::loadTickets,
+                        enabled = !uiState.isLoadingTickets,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = KoraBurgundy),
+                    ) {
+                        if (uiState.isLoadingTickets) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.height(20.dp),
+                                color = Color.White,
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(Icons.Default.Sync, contentDescription = null)
+                            Text(text = "  Загрузить билеты", modifier = Modifier.padding(start = 4.dp))
+                        }
+                    }
+                }
             }
 
-            if (uiState.purpose == ScannerPurpose.DigitalId) {
-                Text(
-                    text = "Сканируйте QR, который гость показывает в Госкан или в приложении с цифровым ID.",
-                    style = MaterialTheme.typography.bodyLarge,
-                )
+            uiState.statusMessage?.let { message ->
+                Text(text = message, style = MaterialTheme.typography.bodyMedium)
             }
 
-            if (!uiState.scanPaused) {
-                Text(
-                    text = "Наведите камеру на QR-код или штрихкод",
-                    style = MaterialTheme.typography.bodyLarge,
-                )
+            OutlinedTextField(
+                value = manualCode,
+                onValueChange = { manualCode = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Код") },
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+            )
+            TextButton(
+                onClick = {
+                    val code = manualCode.trim()
+                    if (code.isNotEmpty()) {
+                        viewModel.onBarcodeDetected(code, fromManual = true)
+                        manualCode = ""
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Проверить")
             }
 
             uiState.errorMessage?.let { message ->
                 Text(text = message, color = MaterialTheme.colorScheme.error)
             }
 
-            uiState.lastTicket?.let { ticket ->
-                TicketResultCard(
-                    ticket = ticket,
-                    digitalMode = uiState.purpose == ScannerPurpose.DigitalId,
-                    onScanAgain = viewModel::resumeScanning,
+            val lastTicket = uiState.lastTicket
+            if (lastTicket != null) {
+                ScanResultPanel(
+                    status = lastTicket.validationStatus,
+                    isExit = uiState.scanDirection == ScanDirection.Exit &&
+                        uiState.purpose == ScannerPurpose.Concert,
                 )
+                if (
+                    lastTicket.validationStatus == ValidationStatus.AlreadyUsed &&
+                    lastTicket.scanHistoryCount > 0
+                ) {
+                    ScanRepeatHistoryCard(
+                        totalScans = lastTicket.scanHistoryCount,
+                        entries = lastTicket.scanHistory,
+                    )
+                }
+                TicketDetailsSection(
+                    ticket = lastTicket,
+                    digitalMode = uiState.purpose == ScannerPurpose.DigitalId,
+                    expanded = uiState.showTicketDetails,
+                    onToggleDetails = viewModel::toggleTicketDetails,
+                )
+                Button(
+                    onClick = viewModel::resumeScanning,
+                    colors = ButtonDefaults.buttonColors(containerColor = KoraBurgundy),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = null)
+                    Text(text = "  Дальше", modifier = Modifier.padding(start = 4.dp))
+                }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+private fun TicketDetailsSection(
+    ticket: TicketInfo,
+    digitalMode: Boolean,
+    expanded: Boolean,
+    onToggleDetails: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            TextButton(onClick = onToggleDetails, modifier = Modifier.fillMaxWidth()) {
+                Text(if (expanded) "Скрыть детали билета" else "Детали билета")
+                Icon(
+                    imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = null,
+                )
+            }
+            if (expanded) {
+                if (ticket.ticketKind == TicketKind.Pushkin) {
+                    Text(
+                        text = "Пушкинская карта",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = KoraGold,
+                    )
+                }
+                if (digitalMode) {
+                    Text(text = ticket.rawPayload.take(120), style = MaterialTheme.typography.bodyMedium)
+                } else {
+                    Text(text = ticket.eventTitle ?: "Билет", style = MaterialTheme.typography.titleMedium)
+                    val rowSeat = listOfNotNull(
+                        ticket.row?.let { "ряд $it" },
+                        ticket.seat?.let { "место $it" },
+                    ).joinToString(", ")
+                    if (rowSeat.isNotBlank()) {
+                        Text(text = rowSeat, style = MaterialTheme.typography.headlineSmall)
+                    }
+                    InfoRow("Сектор", ticket.sector)
+                    InfoRow("Площадка", ticket.venue)
+                    InfoRow("Дата и время", ticket.dateTime)
+                }
+            }
         }
     }
 }
@@ -219,34 +324,35 @@ private fun CameraCard(
     cameraGranted: Boolean,
     scanPaused: Boolean,
     isProcessing: Boolean,
+    autoScan: Boolean,
     onRequestCamera: () -> Unit,
     onBarcode: (String) -> Unit,
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Black),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(260.dp)
-                .clip(RoundedCornerShape(20.dp)),
+                .height(220.dp)
+                .clip(RoundedCornerShape(12.dp)),
         ) {
             if (cameraGranted) {
                 QrCameraPreview(
-                    enabled = !scanPaused && !isProcessing,
+                    enabled = !scanPaused && !isProcessing && autoScan,
                     onQrDetected = onBarcode,
                     modifier = Modifier.fillMaxSize(),
                 )
                 Box(
                     modifier = Modifier
                         .align(Alignment.Center)
-                        .fillMaxWidth(0.72f)
-                        .height(180.dp),
+                        .fillMaxWidth(0.78f)
+                        .height(140.dp),
                 ) {
                     ScannerFrameOverlay(modifier = Modifier.fillMaxSize())
                 }
@@ -259,8 +365,9 @@ private fun CameraCard(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
-                        text = "Для сканирования нужен доступ к камере",
+                        text = "Включите камеру в настройках",
                         style = MaterialTheme.typography.bodyLarge,
+                        color = Color.White,
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Button(onClick = onRequestCamera) {
@@ -273,7 +380,7 @@ private fun CameraCard(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.35f)),
+                        .background(Color.Black.copy(alpha = 0.4f)),
                     contentAlignment = Alignment.Center,
                 ) {
                     CircularProgressIndicator(color = KoraGold)
@@ -283,72 +390,8 @@ private fun CameraCard(
     }
 }
 
-@Composable
-private fun TicketResultCard(
-    ticket: TicketInfo,
-    digitalMode: Boolean,
-    onScanAgain: () -> Unit,
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-    ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            StatusChip(ticket.validationStatus)
-            if (ticket.ticketKind == TicketKind.Pushkin) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Пушкинская карта",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = KoraGold,
-                )
-            }
-            if (digitalMode) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = ticket.rawPayload.take(120),
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-            }
-            if (!digitalMode) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = ticket.eventTitle ?: "Билет",
-                    style = MaterialTheme.typography.titleLarge,
-                )
-                val rowSeat = listOfNotNull(
-                    ticket.row?.let { "ряд $it" },
-                    ticket.seat?.let { "место $it" },
-                ).joinToString(", ")
-                if (rowSeat.isNotBlank()) {
-                    Text(
-                        text = rowSeat.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() },
-                        style = MaterialTheme.typography.headlineMedium,
-                    )
-                }
-                InfoRow("Сектор", ticket.sector)
-                InfoRow("Площадка", ticket.venue)
-                InfoRow("Дата и время", ticket.dateTime)
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            Button(
-                onClick = onScanAgain,
-                colors = ButtonDefaults.buttonColors(containerColor = KoraBurgundy),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Default.Refresh, contentDescription = null)
-                Text(
-                    text = "  Проверить следующий",
-                    modifier = Modifier.padding(start = 4.dp),
-                )
-            }
-        }
-    }
-}
-
-private fun vibrateSuccess(context: android.content.Context) {
-    val duration = 40L
+private fun vibrateResult(context: android.content.Context, status: ValidationStatus) {
+    val duration = if (status == ValidationStatus.Valid) 50L else 120L
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         val vibrator = context.getSystemService(VibratorManager::class.java).defaultVibrator
         vibrator.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE))
@@ -361,5 +404,19 @@ private fun vibrateSuccess(context: android.content.Context) {
             @Suppress("DEPRECATION")
             vibrator.vibrate(duration)
         }
+    }
+}
+
+private fun playScanTone(status: ValidationStatus) {
+    val tone = when (status) {
+        ValidationStatus.Valid -> ToneGenerator.TONE_PROP_ACK
+        ValidationStatus.AlreadyUsed -> ToneGenerator.TONE_PROP_NACK
+        ValidationStatus.NotFound -> ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD
+        else -> ToneGenerator.TONE_PROP_BEEP
+    }
+    runCatching {
+        val generator = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 80)
+        generator.startTone(tone, 180)
+        generator.release()
     }
 }

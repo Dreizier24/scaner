@@ -18,7 +18,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import ru.cora.scanner.domain.model.ScanHistoryEntry
 import ru.cora.scanner.domain.model.ValidationStatus
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import ru.cora.scanner.ui.theme.KoraBurgundy
 import ru.cora.scanner.ui.theme.KoraError
 import ru.cora.scanner.ui.theme.KoraGold
@@ -79,6 +83,173 @@ fun NetworkBadge(isOnline: Boolean) {
         style = MaterialTheme.typography.labelLarge,
         color = fg,
         fontWeight = FontWeight.SemiBold,
+    )
+}
+
+@Composable
+fun ScanModeBanner(isOnlineControl: Boolean, forceOffline: Boolean) {
+    val online = isOnlineControl && !forceOffline
+    val label = if (online) "Онлайн режим" else "Офлайн режим"
+    val bg = if (online) KoraSuccess.copy(alpha = 0.12f) else KoraWarning.copy(alpha = 0.18f)
+    val fg = if (online) KoraSuccess else KoraWarning
+    Text(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(bg)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        text = label,
+        style = MaterialTheme.typography.titleMedium,
+        color = fg,
+        fontWeight = FontWeight.SemiBold,
+    )
+}
+
+@Composable
+fun PassStatsRow(
+    ticketsInDb: Int,
+    redeemed: Int,
+    pendingSync: Int,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.White)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+    ) {
+        StatCell("В базе", ticketsInDb.toString())
+        StatCell("Погашено", redeemed.toString())
+        StatCell("Не синхр.", pendingSync.toString())
+    }
+}
+
+@Composable
+private fun StatCell(label: String, value: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = KoraMuted,
+        )
+    }
+}
+
+@Composable
+fun ScanRepeatHistoryCard(
+    totalScans: Int,
+    entries: List<ScanHistoryEntry>,
+    modifier: Modifier = Modifier,
+) {
+    if (entries.isEmpty()) return
+    val fmt = SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale("ru", "RU"))
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.White)
+            .padding(16.dp),
+    ) {
+        Text(
+            text = "Сканирований этого билета: $totalScans",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        entries.take(8).forEachIndexed { index, entry ->
+            val statusLabel = scanStatusLabel(entry.status)
+            val offline = if (entry.wasOffline) " · офлайн" else ""
+            Text(
+                text = "${index + 1}. ${fmt.format(Date(entry.scannedAtEpochMs))} — $statusLabel$offline",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 6.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (entries.size > 8) {
+            Text(
+                text = "… и ещё ${entries.size - 8}",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp),
+                color = KoraMuted,
+            )
+        }
+    }
+}
+
+private fun scanStatusLabel(status: ValidationStatus): String = when (status) {
+    ValidationStatus.Valid -> "допуск"
+    ValidationStatus.AlreadyUsed -> "уже использован"
+    ValidationStatus.NotFound -> "не найден"
+    ValidationStatus.Expired -> "просрочен"
+    ValidationStatus.PendingSync -> "ожидание синхронизации"
+    ValidationStatus.Unknown -> "проверка"
+}
+
+@Composable
+fun ScanResultPanel(
+    status: ValidationStatus,
+    isExit: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val (headline, subline, bg) = resultCopy(status, isExit)
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(bg)
+            .padding(20.dp),
+    ) {
+        Text(
+            text = headline,
+            style = MaterialTheme.typography.headlineSmall,
+            color = Color.White,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(
+            text = subline,
+            style = MaterialTheme.typography.bodyLarge,
+            color = Color.White.copy(alpha = 0.92f),
+            modifier = Modifier.padding(top = 6.dp),
+        )
+    }
+}
+
+private fun resultCopy(
+    status: ValidationStatus,
+    isExit: Boolean,
+): Triple<String, String, Color> = when (status) {
+    ValidationStatus.Valid -> if (isExit) {
+        Triple("Выход", "Проход зафиксирован", Color(0xFF2E6B9E))
+    } else {
+        Triple("Допуск", "Билет действителен, вход разрешён", KoraSuccess)
+    }
+    ValidationStatus.AlreadyUsed -> Triple(
+        "Уже погашен",
+        "Этот штрихкод уже использован",
+        KoraWarning,
+    )
+    ValidationStatus.NotFound -> Triple(
+        "Не найден",
+        "Штрихкода нет в базе этого мероприятия",
+        KoraError,
+    )
+    ValidationStatus.Expired -> Triple("Просрочен", "Билет недействителен", KoraError)
+    ValidationStatus.PendingSync -> Triple(
+        "Офлайн",
+        "Результат сохранён, синхронизация при появлении сети",
+        KoraWarning,
+    )
+    ValidationStatus.Unknown -> Triple(
+        "Проверка",
+        "Нужна связь с сервером или обновление базы",
+        KoraMuted,
     )
 }
 

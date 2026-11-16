@@ -28,6 +28,15 @@ interface ScanHistoryDao {
 
     @Insert
     suspend fun insert(entry: ScanHistoryEntity)
+
+    @Query(
+        """
+        SELECT * FROM scan_history
+        WHERE concertId = :concertId AND ticketId = :placeId
+        ORDER BY scannedAtEpochMs DESC
+        """,
+    )
+    suspend fun getForPlace(concertId: String, placeId: String): List<ScanHistoryEntity>
 }
 
 @Dao

@@ -11,12 +11,14 @@ import ru.cora.scanner.data.local.entity.ConcertEntity
 import ru.cora.scanner.data.local.entity.PendingRedemptionEntity
 import ru.cora.scanner.data.local.entity.ScanHistoryEntity
 import ru.cora.scanner.data.pushkin.PushkinRedemptionService
+import ru.cora.scanner.data.sync.LocalTicketRetention
 import ru.cora.scanner.data.sync.ManifestSyncManager
 import ru.cora.scanner.data.sync.ManifestSyncResult
 import ru.cora.scanner.data.sync.RedemptionSyncManager
 import ru.cora.scanner.domain.BarcodeNormalizer
 import ru.cora.scanner.domain.PushkinTicketDetector
 import ru.cora.scanner.domain.QrPayloadParser
+import ru.cora.scanner.domain.model.ScanHistoryEntry
 import ru.cora.scanner.domain.model.ScanSource
 import ru.cora.scanner.domain.model.TicketInfo
 import ru.cora.scanner.domain.model.TicketKind
@@ -31,7 +33,9 @@ class ConcertScanRepository(
     private val pendingRedemptionDao: PendingRedemptionDao,
     private val manifestSyncManager: ManifestSyncManager,
     private val redemptionSyncManager: RedemptionSyncManager,
+    private val localTicketRetention: LocalTicketRetention,
     private val externalBarcodeImporter: ExternalBarcodeImporter,
+    private val externalEventImporter: ExternalEventImporter,
     private val pushkinRedemptionService: PushkinRedemptionService,
     private val gosuslugiDigitalIdService: GosuslugiDigitalIdService,
 ) {
@@ -44,15 +48,28 @@ class ConcertScanRepository(
 
     fun observeRedeemedCount(concertId: String) = placeTicketDao.observeRedeemedCount(concertId)
 
+    fun observeTicketCount(concertId: String) = placeTicketDao.observeTicketCount(concertId)
+
+    fun observePendingRedemptions(concertId: String) = pendingRedemptionDao.observePendingCount(concertId)
+
+    suspend fun purgeTicketsAfterMidnight() = localTicketRetention.purgeTicketsAfterMidnight()
+
     suspend fun refreshConcerts() = manifestSyncManager.refreshConcerts()
 
     suspend fun loadManifest(concertId: String): Result<ManifestSyncResult> =
         manifestSyncManager.syncManifest(concertId)
 
-    suspend fun importExternalBarcodesJson(concertId: String, json: String) =
-        externalBarcodeImporter.importFromJson(concertId, json)
+    suspend fun importEventFromFile(json: String) = externalEventImporter.importFromFile(json)
+
+    suspend fun isFileConcert(concertId: String): Boolean =
+        concertDao.findById(concertId)?.source == ConcertEntity.SOURCE_FILE
 
     suspend fun flushRedemptions() = redemptionSyncManager.flushAll()
+
+    suspend fun applyRemoteRedemption(concertId: String, placeId: String, scannedAtEpochMs: Long) {
+        placeTicketDao.applyRemoteRedemption(concertId, placeId, scannedAtEpochMs)
+        pendingRedemptionDao.deleteForPlace(concertId, placeId)
+    }
 
     suspend fun flushPendingWhenOnline() {
         redemptionSyncManager.flushAll()
@@ -64,6 +81,7 @@ class ConcertScanRepository(
         raw: String,
         isOnline: Boolean,
         modeDigitalId: Boolean = false,
+        exitOnly: Boolean = false,
     ): TicketInfo {
         val normalized = BarcodeNormalizer.normalize(raw)
 
@@ -78,7 +96,7 @@ class ConcertScanRepository(
         }
 
         if (concertId != null) {
-            scanViaLocalManifest(concertId, normalized, raw, isOnline)?.let { return it }
+            scanViaLocalManifest(concertId, normalized, raw, isOnline, exitOnly)?.let { return it }
         }
 
         val legacy = ticketRepository.resolveScannedPayload(raw, isOnline)
@@ -95,6 +113,7 @@ class ConcertScanRepository(
         normalized: String,
         raw: String,
         isOnline: Boolean,
+        exitOnly: Boolean,
     ): TicketInfo? {
         val index = barcodeIndexDao.find(normalized)
             ?: barcodeIndexDao.find(raw.trim())
@@ -122,16 +141,26 @@ class ConcertScanRepository(
 
         if (place.isRedeemed) {
             val info = buildTicketInfo(concert, place, kind, ValidationStatus.AlreadyUsed, raw, ScanSource.LocalCache)
-            persistScan(info, wasOffline = !isOnline)
-            return info
+            return finishScan(info, wasOffline = !isOnline)
         }
 
         val now = System.currentTimeMillis()
+        if (exitOnly) {
+            val info = buildTicketInfo(
+                concert,
+                place,
+                kind,
+                ValidationStatus.Valid,
+                raw,
+                ScanSource.LocalCache,
+            )
+            return finishScan(info, wasOffline = !isOnline)
+        }
+
         val updated = placeTicketDao.markRedeemed(concertId, place.placeId, now)
         if (updated == 0) {
             val info = buildTicketInfo(concert, place, kind, ValidationStatus.AlreadyUsed, raw, ScanSource.LocalCache)
-            persistScan(info, wasOffline = !isOnline)
-            return info
+            return finishScan(info, wasOffline = !isOnline)
         }
 
         pendingRedemptionDao.insert(
@@ -161,13 +190,13 @@ class ConcertScanRepository(
         }
 
         val info = buildTicketInfo(concert, place, kind, status, raw, ScanSource.LocalCache)
-        persistScan(info, wasOffline = !isOnline)
+        val result = finishScan(info, wasOffline = !isOnline)
 
         if (isOnline) {
             runCatching { flushRedemptions() }
         }
 
-        return info
+        return result
     }
 
     private fun buildTicketInfo(
@@ -193,6 +222,35 @@ class ConcertScanRepository(
         source = source,
         rawPayload = raw,
     )
+
+    private suspend fun finishScan(info: TicketInfo, wasOffline: Boolean): TicketInfo {
+        persistScan(info, wasOffline)
+        return if (info.validationStatus == ValidationStatus.AlreadyUsed) {
+            enrichScanHistory(info)
+        } else {
+            info
+        }
+    }
+
+    private suspend fun enrichScanHistory(info: TicketInfo): TicketInfo {
+        val concertId = info.concertId ?: return info
+        val placeId = info.placeId ?: info.ticketId ?: return info
+        val rows = scanHistoryDao.getForPlace(concertId, placeId)
+        return info.copy(
+            scanHistoryCount = rows.size,
+            scanHistory = rows.map { row ->
+                ScanHistoryEntry(
+                    scannedAtEpochMs = row.scannedAtEpochMs,
+                    status = row.status.toValidationStatus(),
+                    wasOffline = row.wasOffline,
+                )
+            },
+        )
+    }
+
+    private fun String.toValidationStatus(): ValidationStatus = runCatching {
+        ValidationStatus.valueOf(this)
+    }.getOrDefault(ValidationStatus.Unknown)
 
     private suspend fun persistScan(info: TicketInfo, wasOffline: Boolean) {
         scanHistoryDao.insert(

@@ -24,7 +24,7 @@ data class ConcertListUiState(
 
 class ConcertListViewModel(
     private val repository: ConcertScanRepository,
-    networkMonitor: NetworkMonitor,
+    private val networkMonitor: NetworkMonitor,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ConcertListUiState())
@@ -35,38 +35,36 @@ class ConcertListViewModel(
 
     init {
         viewModelScope.launch {
+            runCatching { repository.purgeTicketsAfterMidnight() }
+        }
+        viewModelScope.launch {
             networkMonitor.isOnline.collect { online ->
                 _uiState.update { it.copy(isOnline = online) }
             }
         }
+        viewModelScope.launch {
+            if (networkMonitor.isOnline.first()) {
+                refreshConcerts(silent = true)
+            }
+        }
     }
 
-    fun refreshConcerts() {
+    fun refreshConcerts(silent: Boolean = false) {
         viewModelScope.launch {
             if (!_uiState.value.isOnline) {
-                val cached = concerts.first()
-                _uiState.update {
-                    it.copy(
-                        message = if (cached.isNotEmpty()) {
-                            "Нет интернета. Показан сохранённый список."
-                        } else {
-                            "Нет интернета. Включите Wi‑Fi или мобильную сеть."
-                        },
-                    )
+                if (!silent) {
+                    _uiState.update { it.copy(message = "Нет сети") }
                 }
                 return@launch
             }
 
-            _uiState.update { it.copy(isLoading = true, message = null) }
+            _uiState.update { it.copy(isLoading = true, message = if (silent) it.message else null) }
             repository.refreshConcerts()
                 .onSuccess { count ->
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            message = when {
-                                count > 0 -> "Список обновлён"
-                                else -> "Сейчас нет запланированных концертов"
-                            },
+                            message = if (silent) null else "Событий: $count",
                         )
                     }
                 }
@@ -75,12 +73,32 @@ class ConcertListViewModel(
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            message = if (cached.isNotEmpty()) {
-                                "${ApiErrorMessages.forUser(error)} Показан сохранённый список."
+                            message = if (cached.isNotEmpty() && silent) {
+                                null
                             } else {
                                 ApiErrorMessages.forUser(error)
                             },
                         )
+                    }
+                }
+        }
+    }
+
+    fun importEventFromFile(fileContent: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, message = null) }
+            repository.importEventFromFile(fileContent)
+                .onSuccess { result ->
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            message = "${result.title}: ${result.ticketCount} шт.",
+                        )
+                    }
+                }
+                .onFailure {
+                    _uiState.update {
+                        it.copy(isLoading = false, message = "Ошибка файла")
                     }
                 }
         }

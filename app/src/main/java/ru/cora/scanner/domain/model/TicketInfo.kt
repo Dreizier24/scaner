@@ -1,5 +1,11 @@
 package ru.cora.scanner.domain.model
 
+data class ScanHistoryEntry(
+    val scannedAtEpochMs: Long,
+    val status: ValidationStatus,
+    val wasOffline: Boolean,
+)
+
 data class TicketInfo(
     val ticketId: String? = null,
     val placeId: String? = null,
@@ -17,6 +23,8 @@ data class TicketInfo(
     val validationStatus: ValidationStatus = ValidationStatus.Unknown,
     val source: ScanSource = ScanSource.QrPayload,
     val rawPayload: String,
+    val scanHistoryCount: Int = 0,
+    val scanHistory: List<ScanHistoryEntry> = emptyList(),
 )
 
 enum class ValidationStatus {

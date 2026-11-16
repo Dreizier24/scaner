@@ -11,17 +11,25 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import ru.cora.scanner.data.ConcertScanRepository
+import ru.cora.scanner.data.ScannerPreferences
 import ru.cora.scanner.data.ExternalBarcodeImporter
+import ru.cora.scanner.data.ExternalEventImporter
 import ru.cora.scanner.data.NetworkMonitor
 import ru.cora.scanner.data.TicketRepository
 import ru.cora.scanner.data.gosuslugi.GosuslugiDigitalIdService
 import ru.cora.scanner.data.local.KoraDatabase
 import ru.cora.scanner.data.pushkin.PushkinRedemptionService
 import ru.cora.scanner.data.remote.TicketApiService
+import ru.cora.scanner.data.sync.LocalTicketRetention
 import ru.cora.scanner.data.sync.ManifestSyncManager
 import ru.cora.scanner.data.sync.OfflineSyncManager
 import ru.cora.scanner.data.sync.RedemptionSyncManager
+import ru.cora.scanner.data.sync.RedemptionWebSocketManager
 
 class KoraScannerApp : Application() {
 
@@ -29,6 +37,15 @@ class KoraScannerApp : Application() {
         private set
 
     lateinit var networkMonitor: NetworkMonitor
+        private set
+
+    lateinit var scannerPreferences: ScannerPreferences
+        private set
+
+    lateinit var redemptionWebSocket: RedemptionWebSocketManager
+        private set
+
+    lateinit var httpClient: OkHttpClient
         private set
 
     override fun onCreate() {
@@ -47,6 +64,7 @@ class KoraScannerApp : Application() {
             .build()
 
         networkMonitor = NetworkMonitor(this)
+        scannerPreferences = ScannerPreferences(database.appSettingsDao())
 
         val json = Json {
             ignoreUnknownKeys = true
@@ -60,7 +78,7 @@ class KoraScannerApp : Application() {
                 HttpLoggingInterceptor.Level.NONE
             }
         }
-        val client = OkHttpClient.Builder()
+        httpClient = OkHttpClient.Builder()
             .connectTimeout(45, TimeUnit.SECONDS)
             .readTimeout(45, TimeUnit.SECONDS)
             .writeTimeout(45, TimeUnit.SECONDS)
@@ -78,7 +96,7 @@ class KoraScannerApp : Application() {
         val contentType = "application/json".toMediaType()
         val retrofit = Retrofit.Builder()
             .baseUrl(BuildConfig.API_BASE_URL)
-            .client(client)
+            .client(httpClient)
             .addConverterFactory(json.asConverterFactory(contentType))
             .build()
 
@@ -98,7 +116,14 @@ class KoraScannerApp : Application() {
             offlineSyncManager = offlineSync,
         )
 
+        val barcodeImporter = ExternalBarcodeImporter(
+            api = api,
+            placeTicketDao = database.placeTicketDao(),
+            barcodeIndexDao = database.barcodeIndexDao(),
+        )
+        val eventImporter = ExternalEventImporter(database, barcodeImporter)
         val manifestSync = ManifestSyncManager(database, api)
+        val ticketRetention = LocalTicketRetention(database)
         val redemptionSync = RedemptionSyncManager(
             api = api,
             pendingRedemptionDao = database.pendingRedemptionDao(),
@@ -114,13 +139,21 @@ class KoraScannerApp : Application() {
             pendingRedemptionDao = database.pendingRedemptionDao(),
             manifestSyncManager = manifestSync,
             redemptionSyncManager = redemptionSync,
-            externalBarcodeImporter = ExternalBarcodeImporter(
-                api = api,
-                placeTicketDao = database.placeTicketDao(),
-                barcodeIndexDao = database.barcodeIndexDao(),
-            ),
+            localTicketRetention = ticketRetention,
+            externalBarcodeImporter = barcodeImporter,
+            externalEventImporter = eventImporter,
             pushkinRedemptionService = PushkinRedemptionService(api),
             gosuslugiDigitalIdService = GosuslugiDigitalIdService(api),
         )
+
+        redemptionWebSocket = RedemptionWebSocketManager(
+            httpClient = httpClient,
+            repository = scanRepository,
+            json = json,
+        )
+
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            runCatching { scanRepository.purgeTicketsAfterMidnight() }
+        }
     }
 }

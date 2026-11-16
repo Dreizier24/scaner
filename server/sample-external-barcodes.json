@@ -1,11 +1,9 @@
-[
-  "GUEST-2026-0001",
-  "GUEST-2026-0002",
-  {
-    "barcode": "PARTNER-TICKET-99",
-    "row": "8",
-    "seat": "14",
-    "sector": "Партер",
-    "isPushkin": false
-  }
-]
+{
+  "title": "Гостевой концерт (сторонние билеты)",
+  "venue": "г. Майкоп",
+  "dateTime": "15.11.2026 19:00",
+  "barcodes": [
+    "GUEST-2026-0001",
+    "GUEST-2026-0002"
+  ]
+}
