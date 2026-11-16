@@ -13,6 +13,16 @@
 
 Каталог [`server/`](server/): FastAPI + SQLite, тестовые концерты и билеты. Запуск: `server\run.bat` или см. [server/README.md](server/README.md).
 
+### Деплой и релизы
+
+| Документ | Для кого |
+|----------|----------|
+| [server/CURSOR_AGENT_SERVER.md](server/CURSOR_AGENT_SERVER.md) | Cursor-агент: только VPS, API, OTA, nginx |
+| [docs/BUILD_APK.md](docs/BUILD_APK.md) | Сборка APK и публикация на сервер |
+| [docs/CURSOR_AGENT_ANDROID_BUILD.md](docs/CURSOR_AGENT_ANDROID_BUILD.md) | Cursor-агент: Gradle на Linux |
+
+**OTA:** при входе в приложение проверяется `…/scanner/app/update.json`; APK — `…/scanner/releases/kora-scanner.apk`.
+
 ### Развёрнутый API (подключение приложения)
 
 | Назначение | URL |

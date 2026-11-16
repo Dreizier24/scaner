@@ -20,6 +20,7 @@ from app.schemas import (
     ValidateTicketRequest,
     ValidateTicketResponse,
 )
+from app.app_release import read_update_manifest
 from app.seed import ensure_loadtest_concert, seed_if_empty
 from app.ws_hub import ws_hub
 
@@ -152,3 +153,9 @@ def validate_digital_id(body: GosuslugiIdValidateRequest):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/app/update.json")
+def app_update_manifest():
+    """Манифест OTA-обновления Android (versionCode, apkUrl)."""
+    return read_update_manifest()

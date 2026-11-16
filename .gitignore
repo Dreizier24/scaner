@@ -15,3 +15,5 @@
 *.aab
 /server/.venv/
 /server/data/
+/.kotlin/
+/server/releases/*.apk

@@ -1,0 +1,7 @@
+{
+  "versionCode": 6,
+  "versionName": "1.0.5",
+  "apkUrl": "https://37.252.21.72.nip.io/scanner/releases/kora-scanner.apk",
+  "releaseNotes": "Обновление с сервера: диалог и загрузка новой версии приложения.",
+  "mandatory": false
+}

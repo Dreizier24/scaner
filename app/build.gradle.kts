@@ -14,8 +14,8 @@ android {
         applicationId = "ru.cora.scanner"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "1.0.4"
+        versionCode = 6
+        versionName = "1.0.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -23,6 +23,11 @@ android {
             "String",
             "API_BASE_URL",
             "\"https://37.252.21.72.nip.io/scanner/api/v1/\"",
+        )
+        buildConfigField(
+            "String",
+            "APP_UPDATE_URL",
+            "\"https://37.252.21.72.nip.io/scanner/app/update.json\"",
         )
     }
 
