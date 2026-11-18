@@ -46,24 +46,14 @@ fun ScannerSettingsScreen(
             .fillMaxSize()
             .background(KoraCream),
     ) {
-        Box {
-            KoraTopBar(
-                title = "Настройки",
-                subtitle = if (state.isOnline && !state.forceOffline) "Онлайн" else "Офлайн",
-                isOnline = state.isOnline && !state.forceOffline,
-            )
-            IconButton(
-                onClick = onBack,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(4.dp),
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Назад",
-                    tint = YaBlack,
-                )
-            }
+        KoraTopBar(
+            title = "Настройки",
+            subtitle = "",
+            isOnline = state.isOnline && !state.forceOffline,
+        )
+        androidx.compose.material3.TextButton(onClick = onBack) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = YaBlack)
+            Text("Назад", color = YaBlack)
         }
 
         Column(

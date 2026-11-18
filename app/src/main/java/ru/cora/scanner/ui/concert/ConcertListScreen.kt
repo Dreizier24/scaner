@@ -4,8 +4,8 @@ import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -17,10 +17,11 @@ import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -37,6 +38,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.cora.scanner.data.local.entity.ConcertEntity
 import ru.cora.scanner.ui.components.KoraTopBar
 import ru.cora.scanner.ui.theme.KoraCream
+import ru.cora.scanner.ui.theme.YaBlack
+import ru.cora.scanner.ui.theme.YaYellow
 import java.nio.charset.StandardCharsets
 
 @Composable
@@ -67,30 +70,11 @@ fun ConcertListScreen(
             .fillMaxSize()
             .background(KoraCream),
     ) {
-        Box {
-            KoraTopBar(
-                title = "КОРА",
-                subtitle = "Мероприятия",
-                isOnline = uiState.isOnline,
-            )
-            IconButton(
-                onClick = onOpenSettings,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(8.dp),
-            ) {
-                Icon(Icons.Default.Settings, contentDescription = "Настройки", tint = ru.cora.scanner.ui.theme.YaBlack)
-            }
-            IconButton(
-                onClick = { viewModel.refreshConcerts() },
-                enabled = !uiState.isLoading,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(8.dp),
-            ) {
-                Icon(Icons.Default.Sync, contentDescription = "Синхронизировать", tint = ru.cora.scanner.ui.theme.YaBlack)
-            }
-        }
+        KoraTopBar(
+            title = "КОРА",
+            subtitle = "Мероприятия",
+            isOnline = uiState.isOnline,
+        )
 
         Column(
             modifier = Modifier
@@ -113,12 +97,37 @@ fun ConcertListScreen(
                 Text(text = "  Из файла", modifier = Modifier.padding(start = 4.dp))
             }
 
-            OutlinedButton(
-                onClick = onDigitalIdScan,
+            Row(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Icon(Icons.Default.Badge, contentDescription = null)
-                Text(text = "  Цифровой ID", modifier = Modifier.padding(start = 4.dp))
+                OutlinedButton(
+                    onClick = onDigitalIdScan,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Icon(Icons.Default.Badge, contentDescription = null)
+                    Text("  Цифровой ID")
+                }
+                OutlinedButton(
+                    onClick = { viewModel.refreshConcerts() },
+                    enabled = !uiState.isLoading && uiState.loadingConcertId == null,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Icon(Icons.Default.Sync, contentDescription = null)
+                    Text("  Обновить")
+                }
+            }
+
+            Button(
+                onClick = onOpenSettings,
+                modifier = Modifier.fillMaxWidth(),
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    containerColor = YaYellow,
+                    contentColor = YaBlack,
+                ),
+            ) {
+                Icon(Icons.Default.Settings, contentDescription = null)
+                Text("  Настройки")
             }
 
             uiState.message?.let {
@@ -140,7 +149,16 @@ fun ConcertListScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(concerts, key = { it.concertId }) { concert ->
-                    ConcertCard(concert = concert, onClick = { onConcertSelected(concert.concertId) })
+                    val ticketCount by viewModel.ticketCount(concert.concertId)
+                        .collectAsStateWithLifecycle()
+                    ConcertCard(
+                        concert = concert,
+                        ticketCount = ticketCount,
+                        loading = uiState.loadingConcertId == concert.concertId,
+                        enabled = uiState.loadingConcertId == null,
+                        onOpen = { onConcertSelected(concert.concertId) },
+                        onLoad = { viewModel.loadTickets(concert.concertId) },
+                    )
                 }
             }
         }
@@ -148,13 +166,20 @@ fun ConcertListScreen(
 }
 
 @Composable
-private fun ConcertCard(concert: ConcertEntity, onClick: () -> Unit) {
+private fun ConcertCard(
+    concert: ConcertEntity,
+    ticketCount: Int,
+    loading: Boolean,
+    enabled: Boolean,
+    onOpen: () -> Unit,
+    onLoad: () -> Unit,
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .clickable(enabled = !loading, onClick = onOpen),
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(text = concert.title, style = MaterialTheme.typography.titleMedium)
             if (concert.source == ConcertEntity.SOURCE_FILE) {
                 Text(
@@ -165,6 +190,23 @@ private fun ConcertCard(concert: ConcertEntity, onClick: () -> Unit) {
             }
             concert.dateTime?.let {
                 Text(text = it, style = MaterialTheme.typography.bodyMedium)
+            }
+            Text(
+                text = if (ticketCount > 0) "В базе: $ticketCount" else "Билеты не загружены",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (loading) {
+                Text("Загрузка билетов…", style = MaterialTheme.typography.titleSmall)
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            } else {
+                OutlinedButton(
+                    onClick = onLoad,
+                    enabled = enabled,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Загрузить билеты")
+                }
             }
         }
     }

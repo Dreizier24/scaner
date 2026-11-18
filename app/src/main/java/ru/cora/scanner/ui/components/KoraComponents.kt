@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -46,26 +47,28 @@ fun KoraTopBar(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 18.dp),
+                .statusBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 14.dp),
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.headlineMedium,
-                color = YaBlack,
-            )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
+                    text = title,
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = YaBlack,
+                )
+                NetworkBadge(isOnline = isOnline)
+            }
+            if (subtitle.isNotBlank()) {
+                Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodyLarge,
                     color = YaBlack,
+                    modifier = Modifier.padding(top = 4.dp),
                 )
-                if (!isOnline) {
-                    NetworkBadge(isOnline = false)
-                }
             }
         }
     }
@@ -73,17 +76,17 @@ fun KoraTopBar(
 
 @Composable
 fun NetworkBadge(isOnline: Boolean) {
-    val bg = if (isOnline) KoraSuccess.copy(alpha = 0.25f) else KoraWarning.copy(alpha = 0.25f)
-    val fg = if (isOnline) Color(0xFFDFF5E8) else Color(0xFFFFF1CC)
+    val bg = if (isOnline) Color(0xFFE8F6EC) else Color(0xFFFFF3E0)
+    val fg = if (isOnline) KoraSuccess else Color(0xFF8A4B00)
     Text(
         modifier = Modifier
             .clip(RoundedCornerShape(999.dp))
             .background(bg)
-            .padding(horizontal = 10.dp, vertical = 4.dp),
-        text = "Нет сети",
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        text = if (isOnline) "Онлайн" else "Офлайн",
         style = MaterialTheme.typography.labelLarge,
         color = fg,
-        fontWeight = FontWeight.SemiBold,
+        fontWeight = FontWeight.Bold,
     )
 }
 

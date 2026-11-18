@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -19,6 +20,7 @@ import ru.cora.scanner.data.local.entity.ConcertEntity
 data class ConcertListUiState(
     val isOnline: Boolean = true,
     val isLoading: Boolean = false,
+    val loadingConcertId: String? = null,
     val message: String? = null,
 )
 
@@ -32,6 +34,13 @@ class ConcertListViewModel(
 
     val concerts: StateFlow<List<ConcertEntity>> = repository.concerts
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val ticketCounts = mutableMapOf<String, StateFlow<Int>>()
+
+    fun ticketCount(concertId: String): StateFlow<Int> = ticketCounts.getOrPut(concertId) {
+        repository.observeTicketCount(concertId)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+    }
 
     init {
         viewModelScope.launch {
@@ -78,6 +87,30 @@ class ConcertListViewModel(
                             } else {
                                 ApiErrorMessages.forUser(error)
                             },
+                        )
+                    }
+                }
+        }
+    }
+
+    fun loadTickets(concertId: String) {
+        if (_uiState.value.loadingConcertId != null) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(loadingConcertId = concertId, message = "Загрузка билетов…") }
+            repository.loadManifest(concertId)
+                .onSuccess { result ->
+                    _uiState.update {
+                        it.copy(
+                            loadingConcertId = null,
+                            message = "Загружено билетов: ${result.placeCount}",
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    _uiState.update {
+                        it.copy(
+                            loadingConcertId = null,
+                            message = ApiErrorMessages.forUser(error),
                         )
                     }
                 }

@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -110,35 +111,14 @@ fun ScannerScreen(
             .fillMaxSize()
             .background(KoraCream),
     ) {
-        Box {
-            KoraTopBar(
-                title = "КОРА",
-                subtitle = subtitle,
-                isOnline = uiState.isOnline && !uiState.forceOffline,
-            )
-            IconButton(
-                onClick = onBack,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(8.dp),
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Назад",
-                    tint = YaBlack,
-                )
-            }
-            if (uiState.purpose == ScannerPurpose.Concert) {
-                IconButton(
-                    onClick = viewModel::loadTickets,
-                    enabled = !uiState.isLoadingTickets,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp),
-                ) {
-                    Icon(Icons.Default.Sync, contentDescription = "Синхронизировать", tint = YaBlack)
-                }
-            }
+        KoraTopBar(
+            title = "КОРА",
+            subtitle = subtitle,
+            isOnline = uiState.isOnline && !uiState.forceOffline,
+        )
+        TextButton(onClick = onBack) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = YaBlack)
+            Text("Назад", color = YaBlack)
         }
 
         val canScanCamera = uiState.useCamera &&
