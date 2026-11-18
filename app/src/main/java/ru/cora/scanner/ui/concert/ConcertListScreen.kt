@@ -79,7 +79,7 @@ fun ConcertListScreen(
                     .align(Alignment.TopStart)
                     .padding(8.dp),
             ) {
-                Icon(Icons.Default.Settings, contentDescription = "Настройки", tint = Color.White)
+                Icon(Icons.Default.Settings, contentDescription = "Настройки", tint = ru.cora.scanner.ui.theme.YaBlack)
             }
             IconButton(
                 onClick = { viewModel.refreshConcerts() },
@@ -88,7 +88,7 @@ fun ConcertListScreen(
                     .align(Alignment.TopEnd)
                     .padding(8.dp),
             ) {
-                Icon(Icons.Default.Sync, contentDescription = "Список с сервера", tint = Color.White)
+                Icon(Icons.Default.Sync, contentDescription = "Синхронизировать", tint = ru.cora.scanner.ui.theme.YaBlack)
             }
         }
 

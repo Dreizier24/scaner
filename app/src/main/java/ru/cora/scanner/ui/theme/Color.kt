@@ -2,13 +2,21 @@ package ru.cora.scanner.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val KoraBurgundy = Color(0xFF7A1E3A)
-val KoraBurgundyDark = Color(0xFF5C1529)
-val KoraGold = Color(0xFFC9A227)
-val KoraGoldSoft = Color(0xFFE8D5A3)
-val KoraCream = Color(0xFFF7F3EE)
-val KoraInk = Color(0xFF1E1A1B)
-val KoraMuted = Color(0xFF6B6466)
-val KoraSuccess = Color(0xFF2E7D4F)
-val KoraWarning = Color(0xFFB8860B)
-val KoraError = Color(0xFFB3261E)
+/** Палитра экрана сканера по схеме «Яндекс Билеты: сканер»: жёлтый акцент, белый фон, чёрный текст. */
+val YaYellow = Color(0xFFFCE000)
+val YaYellowPressed = Color(0xFFE6CC00)
+val YaBlack = Color(0xFF000000)
+val YaWhite = Color(0xFFFFFFFF)
+val YaGrayBg = Color(0xFFF5F5F5)
+val YaGrayText = Color(0xFF666666)
+
+val KoraBurgundy = YaBlack
+val KoraBurgundyDark = Color(0xFF1A1A1A)
+val KoraGold = YaYellow
+val KoraGoldSoft = Color(0xFFFFF6B3)
+val KoraCream = YaGrayBg
+val KoraInk = YaBlack
+val KoraMuted = YaGrayText
+val KoraSuccess = Color(0xFF1B8A3E)
+val KoraWarning = Color(0xFFE6A000)
+val KoraError = Color(0xFFE53935)

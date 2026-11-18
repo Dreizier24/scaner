@@ -66,9 +66,10 @@ import ru.cora.scanner.ui.components.PassStatsRow
 import ru.cora.scanner.ui.components.ScanRepeatHistoryCard
 import ru.cora.scanner.ui.components.ScanResultPanel
 import ru.cora.scanner.ui.components.ScannerFrameOverlay
-import ru.cora.scanner.ui.theme.KoraBurgundy
 import ru.cora.scanner.ui.theme.KoraCream
 import ru.cora.scanner.ui.theme.KoraGold
+import ru.cora.scanner.ui.theme.YaBlack
+import ru.cora.scanner.ui.theme.YaYellow
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -124,7 +125,7 @@ fun ScannerScreen(
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Назад",
-                    tint = Color.White,
+                    tint = YaBlack,
                 )
             }
             if (uiState.purpose == ScannerPurpose.Concert) {
@@ -135,12 +136,14 @@ fun ScannerScreen(
                         .align(Alignment.TopEnd)
                         .padding(8.dp),
                 ) {
-                    Icon(Icons.Default.Sync, contentDescription = "Загрузить билеты", tint = Color.White)
+                    Icon(Icons.Default.Sync, contentDescription = "Синхронизировать", tint = YaBlack)
                 }
             }
         }
 
-        val canScanCamera = uiState.purpose != ScannerPurpose.Concert || uiState.ticketCount > 0
+        val canScanCamera = uiState.useCamera &&
+            (uiState.purpose != ScannerPurpose.Concert || uiState.ticketCount > 0)
+        if (uiState.useCamera) {
         CameraCard(
             cameraGranted = cameraPermission.status.isGranted,
             scanPaused = uiState.scanPaused,
@@ -149,6 +152,7 @@ fun ScannerScreen(
             onRequestCamera = { cameraPermission.launchPermissionRequest() },
             onBarcode = { viewModel.onBarcodeDetected(it, fromManual = false) },
         )
+        }
 
         Column(
             modifier = Modifier
@@ -178,18 +182,23 @@ fun ScannerScreen(
                     )
                 }
 
-                PassStatsRow(
-                    ticketsInDb = uiState.ticketCount,
-                    redeemed = uiState.redeemedCount,
-                    pendingSync = uiState.pendingSyncCount,
-                )
+                if (uiState.passStats) {
+                    PassStatsRow(
+                        ticketsInDb = uiState.ticketCount,
+                        redeemed = uiState.redeemedCount,
+                        pendingSync = uiState.pendingSyncCount,
+                    )
+                }
 
                 if (uiState.ticketCount == 0) {
                     Button(
                         onClick = viewModel::loadTickets,
                         enabled = !uiState.isLoadingTickets,
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = KoraBurgundy),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = YaYellow,
+                            contentColor = YaBlack,
+                        ),
                     ) {
                         if (uiState.isLoadingTickets) {
                             CircularProgressIndicator(
@@ -213,7 +222,7 @@ fun ScannerScreen(
                 value = manualCode,
                 onValueChange = { manualCode = it },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Код") },
+                label = { Text("Штрихкод вручную") },
                 singleLine = true,
                 shape = RoundedCornerShape(12.dp),
             )
@@ -227,7 +236,7 @@ fun ScannerScreen(
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("Проверить")
+                Text("Проверить штрихкод")
             }
 
             uiState.errorMessage?.let { message ->
@@ -258,7 +267,10 @@ fun ScannerScreen(
                 )
                 Button(
                     onClick = viewModel::resumeScanning,
-                    colors = ButtonDefaults.buttonColors(containerColor = KoraBurgundy),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = YaYellow,
+                        contentColor = YaBlack,
+                    ),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Icon(Icons.Default.Refresh, contentDescription = null)
@@ -285,7 +297,7 @@ private fun TicketDetailsSection(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             TextButton(onClick = onToggleDetails, modifier = Modifier.fillMaxWidth()) {
-                Text(if (expanded) "Скрыть детали билета" else "Детали билета")
+                Text(if (expanded) "Скрыть" else "Подробнее")
                 Icon(
                     imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                     contentDescription = null,
@@ -310,7 +322,11 @@ private fun TicketDetailsSection(
                     if (rowSeat.isNotBlank()) {
                         Text(text = rowSeat, style = MaterialTheme.typography.headlineSmall)
                     }
+                    InfoRow("Номер заказа", ticket.orderId)
                     InfoRow("Сектор", ticket.sector)
+                    InfoRow("Ряд", ticket.row)
+                    InfoRow("Место", ticket.seat)
+                    InfoRow("ФИО", ticket.holderName)
                     InfoRow("Площадка", ticket.venue)
                     InfoRow("Дата и время", ticket.dateTime)
                 }

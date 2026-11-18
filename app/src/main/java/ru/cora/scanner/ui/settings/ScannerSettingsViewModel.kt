@@ -18,6 +18,9 @@ data class ScannerSettingsUiState(
     val autoScan: Boolean = true,
     val soundEnabled: Boolean = true,
     val vibrationEnabled: Boolean = true,
+    val passStats: Boolean = true,
+    val autoSync: Boolean = true,
+    val useCamera: Boolean = true,
     val apiUrl: String = BuildConfig.API_BASE_URL,
 )
 
@@ -45,6 +48,9 @@ class ScannerSettingsViewModel(
                 autoScan = preferences.isAutoScan(),
                 soundEnabled = preferences.isSoundEnabled(),
                 vibrationEnabled = preferences.isVibrationEnabled(),
+                passStats = preferences.isPassStatsEnabled(),
+                autoSync = preferences.isAutoSyncEnabled(),
+                useCamera = preferences.isCameraEnabled(),
             )
         }
     }
@@ -67,6 +73,21 @@ class ScannerSettingsViewModel(
     fun setVibrationEnabled(value: Boolean) = viewModelScope.launch {
         preferences.setVibrationEnabled(value)
         _uiState.update { it.copy(vibrationEnabled = value) }
+    }
+
+    fun setPassStats(value: Boolean) = viewModelScope.launch {
+        preferences.setPassStatsEnabled(value)
+        _uiState.update { it.copy(passStats = value) }
+    }
+
+    fun setAutoSync(value: Boolean) = viewModelScope.launch {
+        preferences.setAutoSyncEnabled(value)
+        _uiState.update { it.copy(autoSync = value) }
+    }
+
+    fun setUseCamera(value: Boolean) = viewModelScope.launch {
+        preferences.setCameraEnabled(value)
+        _uiState.update { it.copy(useCamera = value) }
     }
 
     class Factory(

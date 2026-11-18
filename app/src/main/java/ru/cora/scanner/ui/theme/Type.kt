@@ -8,15 +8,15 @@ import androidx.compose.ui.unit.sp
 
 val KoraTypography = Typography(
     displaySmall = TextStyle(
-        fontFamily = FontFamily.Serif,
-        fontWeight = FontWeight.SemiBold,
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Bold,
         fontSize = 32.sp,
         lineHeight = 38.sp,
     ),
     headlineMedium = TextStyle(
-        fontFamily = FontFamily.Serif,
-        fontWeight = FontWeight.Medium,
-        fontSize = 24.sp,
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Bold,
+        fontSize = 22.sp,
         lineHeight = 30.sp,
     ),
     titleLarge = TextStyle(

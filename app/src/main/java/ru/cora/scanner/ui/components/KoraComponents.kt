@@ -23,12 +23,13 @@ import ru.cora.scanner.domain.model.ValidationStatus
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import ru.cora.scanner.ui.theme.KoraBurgundy
 import ru.cora.scanner.ui.theme.KoraError
 import ru.cora.scanner.ui.theme.KoraGold
 import ru.cora.scanner.ui.theme.KoraMuted
 import ru.cora.scanner.ui.theme.KoraSuccess
 import ru.cora.scanner.ui.theme.KoraWarning
+import ru.cora.scanner.ui.theme.YaBlack
+import ru.cora.scanner.ui.theme.YaYellow
 
 @Composable
 fun KoraTopBar(
@@ -39,7 +40,7 @@ fun KoraTopBar(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = KoraBurgundy,
+        color = YaYellow,
         shadowElevation = 6.dp,
     ) {
         Column(
@@ -50,7 +51,7 @@ fun KoraTopBar(
             Text(
                 text = title,
                 style = MaterialTheme.typography.headlineMedium,
-                color = Color.White,
+                color = YaBlack,
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -60,7 +61,7 @@ fun KoraTopBar(
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodyLarge,
-                    color = Color(0xFFF2E8EC),
+                    color = YaBlack,
                 )
                 if (!isOnline) {
                     NetworkBadge(isOnline = false)

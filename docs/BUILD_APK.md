@@ -29,7 +29,20 @@ ssh root@37.252.21.72 '/opt/scaner/server/scripts/publish-apk.sh /tmp/kora.apk 6
 
 Подставьте актуальные `versionCode`, `versionName`.
 
-## Вариант B — сборка на VPS (`/opt/scaner`)
+## Вариант B — GitHub Actions (сервер не собирает)
+
+При push в `main` с изменениями в `app/` workflow `.github/workflows/android-apk.yml` собирает debug APK на машине GitHub и по SSH отдаёт его на VPS. Скрипт `server/scripts/ci-receive-apk.sh` вызывает `publish-apk.sh`: файл `releases/kora-scanner.apk` и `update.json`. Телефон видит новую версию при входе.
+
+Секреты репозитория (один раз, с PAT):
+
+```bash
+export GH_TOKEN=...   # scope repo, не вставлять в чат
+bash /opt/scaner/server/scripts/set-github-actions-secrets.sh
+```
+
+Ключ Actions на сервере может только принять APK, без оболочки.
+
+## Вариант C — сборка на VPS (`/opt/scaner`)
 
 На маленьком VPS (≈4 ГБ RAM) без swap Gradle часто падает по OOM — **сначала swap**:
 

@@ -22,6 +22,8 @@ data class ScannerUiState(
     val autoScan: Boolean = true,
     val soundEnabled: Boolean = true,
     val vibrationEnabled: Boolean = true,
+    val passStats: Boolean = true,
+    val useCamera: Boolean = true,
     val scanDirection: ScanDirection = ScanDirection.Entry,
     val isProcessing: Boolean = false,
     val lastTicket: TicketInfo? = null,
@@ -126,6 +128,8 @@ class ScannerViewModel(
                     autoScan = preferences.isAutoScan(),
                     soundEnabled = preferences.isSoundEnabled(),
                     vibrationEnabled = preferences.isVibrationEnabled(),
+                    passStats = preferences.isPassStatsEnabled(),
+                    useCamera = preferences.isCameraEnabled(),
                     scanDirection = preferences.scanDirection(),
                 )
             }
